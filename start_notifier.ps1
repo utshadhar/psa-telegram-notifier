@@ -5,11 +5,15 @@
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $NotifierScript = Join-Path $ScriptDir "notifier.py"
 $LogPath = Join-Path $ScriptDir "watchdog.log"
-$GitExe = "C:\Program Files\Git\cmd\git.exe"
 
-# Telegram credentials (for update notifications)
-$TelegramToken  = "8994618380:AAFxJSC5KNBfs6iLX12VWvB3uSTheOvJ-CA"
-$TelegramChatId = "1262260329"
+# Find git executable dynamically
+$GitExe = "C:\Program Files\Git\cmd\git.exe"
+if (-not (Test-Path $GitExe)) {
+    $GitCommand = Get-Command git -ErrorAction SilentlyContinue
+    if ($GitCommand) {
+        $GitExe = $GitCommand.Source
+    }
+}
 
 function Write-Log($Message) {
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -19,12 +23,22 @@ function Write-Log($Message) {
 }
 
 function Send-TelegramMessage($Text) {
-    try {
-        $Url = "https://api.telegram.org/bot$TelegramToken/sendMessage"
-        $Body = @{ chat_id = $TelegramChatId; text = $Text; parse_mode = "Markdown" }
-        Invoke-RestMethod -Uri $Url -Method Post -Body $Body -ErrorAction SilentlyContinue | Out-Null
+    # Dynamically read token and chat ID from config.json
+    $ConfigPath = Join-Path $ScriptDir "config.json"
+    if (Test-Path $ConfigPath) {
+        try {
+            $Config = Get-Content -Raw -Path $ConfigPath | ConvertFrom-Json
+            $TelegramToken = $Config.telegram_bot_token
+            $TelegramChatId = $Config.telegram_chat_id
+            
+            if ($TelegramToken -and $TelegramChatId -and -not ($TelegramToken -like "*YOUR_*") -and -not ($TelegramChatId -like "*YOUR_*")) {
+                $Url = "https://api.telegram.org/bot$TelegramToken/sendMessage"
+                $Body = @{ chat_id = $TelegramChatId; text = $Text; parse_mode = "Markdown" }
+                Invoke-RestMethod -Uri $Url -Method Post -Body $Body -ErrorAction SilentlyContinue | Out-Null
+            }
+        }
+        catch { <# Silently ignore #> }
     }
-    catch { <# Silently ignore if Telegram is unreachable #> }
 }
 
 function Stop-Notifier {
@@ -40,8 +54,10 @@ function Start-Notifier {
     try {
         $PythonExe = "C:\Program Files\Python311\python.exe"
         if (-not (Test-Path $PythonExe)) {
-            # Fallback: try finding python in common locations
             $PythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
+        }
+        if (-not $PythonExe) {
+            $PythonExe = "python"
         }
         Start-Process -FilePath $PythonExe -ArgumentList $NotifierScript -WindowStyle Hidden -WorkingDirectory $ScriptDir
         Write-Log "Notifier process started successfully."
