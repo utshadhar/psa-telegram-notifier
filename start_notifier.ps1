@@ -67,7 +67,18 @@ function Start-Notifier {
     }
 }
 
+
+# ---- Single-instance lock (prevents duplicate watchdogs) ----
+$MutexName = "Global\PSATelegramNotifierWatchdog"
+$Mutex = New-Object System.Threading.Mutex($false, $MutexName)
+$GotLock = $Mutex.WaitOne(0, $false)
+if (-not $GotLock) {
+    Write-Output "Another watchdog instance is already running. Exiting."
+    exit 0
+}
+
 Write-Log "Watchdog script started."
+
 
 # Counter to track when to do a git check (every 1 minute = 4 cycles of 15s)
 $GitCheckCounter = 0
