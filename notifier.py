@@ -570,7 +570,8 @@ def load_config():
         "cv_sorting_api_cookie": "",
         "rpa_config_api_url": "",
         "rpa_config_api_cookie": "",
-        "psa_pending_check_url_template": ""
+        "psa_pending_check_url_template": "",
+        "mock_obd_pending": False
     }
     
     config = defaults.copy()
@@ -947,7 +948,16 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
                 raw_co_list = all_lists
                 
             if not raw_so_list and not raw_co_list:
-                return {"server_stats": {}, "total_pending_so": 0, "total_pending_co": 0}
+                name_lower = (api_name or "").lower()
+                is_obd_api = "obd" in name_lower or name_lower == "api_3" or (default_process or "").upper() == "OBD"
+                if is_obd_api and config and config.get("mock_obd_pending") == True:
+                    raw_so_list = [{
+                        "Plan_Id": "MOCK_OBD_123",
+                        "serverAllocation": "0",
+                        "process": "SO"
+                    }]
+                else:
+                    return {"server_stats": {}, "total_pending_so": 0, "total_pending_co": 0}
     elif isinstance(data, list):
         if default_process is None:
             raw_so_list = data
@@ -969,6 +979,15 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
     proc_upper = (default_process or "").upper()
     is_obd_api = "obd" in name_lower or name_lower == "api_3" or proc_upper == "OBD"
     is_contract_api = "contract" in name_lower or name_lower == "api_4" or proc_upper in ("CON", "CONTRACT")
+
+    if is_obd_api and config and config.get("mock_obd_pending") == True:
+        mock_item = {
+            "Plan_Id": "MOCK_OBD_123",
+            "serverAllocation": "0",
+            "process": "SO"
+        }
+        if not any(item.get("Plan_Id") == "MOCK_OBD_123" for item in raw_so_list if isinstance(item, dict)):
+            raw_so_list.append(mock_item)
 
     # Define keys based on API specification
     if is_obd_api:
