@@ -886,6 +886,66 @@ class TestPSATelegramNotifier(unittest.TestCase):
             self.assertIn("current value -", feature_msg)
             self.assertIn("description -", feature_msg)
 
+    def test_webhook_callback_query_flow(self):
+        """Test that callback query inline button clicks are handled correctly."""
+        class MockRequestHandler(notifier.RequestHandler):
+            def __init__(self):
+                self.headers = {}
+                self.rfile = None
+                self.path = '/webhook'
+                self.response_code = None
+                self.response_body = None
+                
+            def send_json_response(self, code, body):
+                self.response_code = code
+                self.response_body = body
+
+        with patch('notifier.load_config', return_value={"telegram_chat_id": "123"}), \
+             patch('notifier.send_telegram_notification') as mock_send, \
+             patch('notifier.telegram_api_call') as mock_api:
+             
+            handler = MockRequestHandler()
+            
+            def simulate_callback_query(data):
+                import io
+                payload = {
+                    "callback_query": {
+                        "id": "cb123",
+                        "data": data,
+                        "message": {
+                            "chat": {"id": 123},
+                            "text": "original message"
+                        }
+                    }
+                }
+                body_bytes = json.dumps(payload).encode('utf-8')
+                handler.headers = {'Content-Length': str(len(body_bytes))}
+                handler.rfile = io.BytesIO(body_bytes)
+                handler.do_POST()
+
+            # Trigger f1 text message first -> state SELECT_MODE_F1
+            notifier.USER_CONVERSATION_STATE = None
+            import io
+            payload = {
+                "message": {
+                    "chat": {"id": 123},
+                    "text": "f1"
+                }
+            }
+            body_bytes = json.dumps(payload).encode('utf-8')
+            handler.headers = {'Content-Length': str(len(body_bytes))}
+            handler.rfile = io.BytesIO(body_bytes)
+            handler.do_POST()
+            
+            self.assertEqual(notifier.USER_CONVERSATION_STATE, "SELECT_MODE_F1")
+            mock_send.reset_mock()
+            
+            # Click default inline button -> state AWAITING_DEFAULT_VAL_F1
+            simulate_callback_query("default")
+            self.assertEqual(notifier.USER_CONVERSATION_STATE, "AWAITING_DEFAULT_VAL_F1")
+            mock_send.assert_called_with("psa_default_so_pending_threshold_minutes", {"telegram_chat_id": "123"})
+            mock_send.reset_mock()
+
     @patch('notifier.fetch_all_apis')
     @patch('notifier.check_and_send_pending_alert')
     @patch('notifier.load_config')

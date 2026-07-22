@@ -2922,6 +2922,13 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         send_telegram_notification(msg, config)
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
+ 
+                        if not USER_CONVERSATION_STATE:
+                            if is_callback and text in ["default", "current", "none", "yes", "no"]:
+                                msg = "Session expired or bot restarted. Please start again by typing /f1, /f2, etc."
+                                send_telegram_notification(msg, config)
+                                self.send_json_response(200, {"status": "ok", "message": msg})
+                                return
 
                         # Check if user sent off shortcuts: o1-o9, f1_off-f9_off, f1 off-f9 off
                         off_match = re.match(r'^(?:/)?(?:o([1-9])|f([1-9])_off|f([1-9])\s+off)$', text)
