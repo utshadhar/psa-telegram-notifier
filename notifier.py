@@ -2627,8 +2627,12 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                 if callback_query:
                     is_callback = True
                     message = callback_query.get("message")
-                    chat = message.get("chat") if message else None
-                    chat_id = str(chat.get("id")) if chat else ""
+                    from_user = callback_query.get("from")
+                    if from_user:
+                        chat_id = str(from_user.get("id"))
+                    else:
+                        chat = message.get("chat") if message else None
+                        chat_id = str(chat.get("id")) if chat else ""
                     text = str(callback_query.get("data") or "").strip().lower()
                     
                     callback_id = callback_query.get("id")
@@ -2641,6 +2645,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                         chat_id = str(chat.get("id")) if chat else ""
                         text = str(message.get("text") or "").strip().lower()
                     
+                    print(f"[{datetime.datetime.now()}] Webhook received text='{text}' in state='{USER_CONVERSATION_STATE}' from chat_id={chat_id}")
                     expected_chat_id = str(config.get("telegram_chat_id", "")).strip()
                     
                     if chat_id == expected_chat_id:
