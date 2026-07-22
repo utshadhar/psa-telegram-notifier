@@ -1361,8 +1361,21 @@ def send_telegram_notification(message, config, reply_markup=None):
                 return False, err_msg
     except Exception as e:
         err_msg = f"Exception sending Telegram notification: {e}"
-        print(f"[{datetime.datetime.now()}] {err_msg}")
         return False, err_msg
+
+def answer_callback_query(callback_query_id, config):
+    token = config.get("telegram_bot_token")
+    if not token:
+        return
+    url = f"https://api.telegram.org/bot{token}/answerCallbackQuery"
+    payload = {"callback_query_id": callback_query_id}
+    data = json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            response.read()
+    except Exception:
+        pass
 
 def is_time_for_pending_alert(dt, end_hour):
     """
@@ -2112,20 +2125,15 @@ def start_feature_conversation(handler, feat_key, config):
     global USER_CONVERSATION_STATE
     USER_CONVERSATION_STATE = f"SELECT_MODE_{feat_key.upper()}"
     meta = CONV_FEATURE_MAP[feat_key]
-    msg = (
-        f"Update options for {meta['label']}:\n"
-        "1. Default\n"
-        "2. Current\n"
-        "3. None"
-    )
+    msg = f"Update options for {meta['label']}:"
     reply_markup = {
-        "keyboard": [
-            [{"text": "Default"}],
-            [{"text": "Current"}],
-            [{"text": "None"}]
-        ],
-        "one_time_keyboard": True,
-        "resize_keyboard": True
+        "inline_keyboard": [
+            [
+                {"text": "Default", "callback_data": "default"},
+                {"text": "Current", "callback_data": "current"},
+                {"text": "None", "callback_data": "none"}
+            ]
+        ]
     }
     send_telegram_notification(msg, config, reply_markup=reply_markup)
     handler.send_json_response(200, {"status": "ok", "message": msg})
@@ -2615,14 +2623,23 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                 callback_query = update.get("callback_query")
                 message = update.get("message") or update.get("edited_message")
                 
+                is_callback = False
                 if callback_query:
-                    self.send_json_response(200, {"status": "ok"})
-                    return
-                
-                if message:
-                    chat = message.get("chat")
+                    is_callback = True
+                    message = callback_query.get("message")
+                    chat = message.get("chat") if message else None
                     chat_id = str(chat.get("id")) if chat else ""
-                    text = str(message.get("text") or "").strip().lower()
+                    text = str(callback_query.get("data") or "").strip().lower()
+                    
+                    callback_id = callback_query.get("id")
+                    if callback_id:
+                        threading.Thread(target=answer_callback_query, args=(callback_id, config), daemon=True).start()
+                
+                if message or is_callback:
+                    if not is_callback:
+                        chat = message.get("chat")
+                        chat_id = str(chat.get("id")) if chat else ""
+                        text = str(message.get("text") or "").strip().lower()
                     
                     expected_chat_id = str(config.get("telegram_chat_id", "")).strip()
                     
@@ -2732,9 +2749,12 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         send_telegram_notification(msg, config)
                                         ask_msg = f"want to on {meta['label']}?"
                                         reply_markup = {
-                                            "keyboard": [[{"text": "Yes"}], [{"text": "No"}]],
-                                            "one_time_keyboard": True,
-                                            "resize_keyboard": True
+                                            "inline_keyboard": [
+                                                [
+                                                    {"text": "Yes", "callback_data": "yes"},
+                                                    {"text": "No", "callback_data": "no"}
+                                                ]
+                                            ]
                                         }
                                         send_telegram_notification(ask_msg, config, reply_markup=reply_markup)
                                         USER_CONVERSATION_STATE = f"AWAITING_ON_CONFIRM_{feat_key.upper()}"
@@ -2796,10 +2816,13 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         send_telegram_notification(msg, config)
                                         ask_msg = f"want to on {meta['label']}?"
                                         reply_markup = {
-                                            "keyboard": [[{"text": "Yes"}], [{"text": "No"}]],
-                                            "one_time_keyboard": True,
-                                            "resize_keyboard": True
-                                        }
+                                            "inline_keyboard": [
+                                                [
+                                                    {"text": "Yes", "callback_data": "yes"},
+                                                    {"text": "No", "callback_data": "no"}
+                                                ]
+                                             ]
+                                         }
                                         send_telegram_notification(ask_msg, config, reply_markup=reply_markup)
                                         USER_CONVERSATION_STATE = f"AWAITING_ON_CONFIRM_{feat_key.upper()}"
                                         self.send_json_response(200, {"status": "ok", "message": ask_msg})
@@ -2815,13 +2838,13 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         USER_CONVERSATION_STATE = f"AWAITING_ON_CHOICE_{feat_key.upper()}"
                                         msg = "Select Default or Current:"
                                         reply_markup = {
-                                            "keyboard": [
-                                                [{"text": "Default"}],
-                                                [{"text": "Current"}],
-                                                [{"text": "None"}]
-                                            ],
-                                            "one_time_keyboard": True,
-                                            "resize_keyboard": True
+                                            "inline_keyboard": [
+                                                [
+                                                    {"text": "Default", "callback_data": "default"},
+                                                    {"text": "Current", "callback_data": "current"},
+                                                    {"text": "None", "callback_data": "none"}
+                                                ]
+                                            ]
                                         }
                                         send_telegram_notification(msg, config, reply_markup=reply_markup)
                                         self.send_json_response(200, {"status": "ok", "message": msg})
