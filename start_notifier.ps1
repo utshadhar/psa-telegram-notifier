@@ -1,9 +1,10 @@
 # Windows PowerShell Watchdog script for PSA Telegram Notifier
-# Place this script in C:\psa-notifier\start_notifier.ps1
+# Auto-pulls latest code from GitHub and restarts notifier on new commits
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $NotifierScript = Join-Path $ScriptDir "notifier.py"
 $LogPath = Join-Path $ScriptDir "watchdog.log"
+$GitExe = "C:\Program Files\Git\cmd\git.exe"
 
 function Write-Log($Message) {
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -12,7 +13,30 @@ function Write-Log($Message) {
     Add-Content -Path $LogPath -Value $LogMessage -ErrorAction SilentlyContinue
 }
 
+function Stop-Notifier {
+    $Processes = Get-CimInstance Win32_Process -Filter "Name like '%python%'" -ErrorAction SilentlyContinue | Where-Object {
+        $_.CommandLine -like "*notifier.py*"
+    }
+    foreach ($P in $Processes) {
+        try { Stop-Process -Id $P.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
+    }
+}
+
+function Start-Notifier {
+    try {
+        Start-Process -FilePath "python" -ArgumentList $NotifierScript -WindowStyle Hidden -WorkingDirectory $ScriptDir
+        Write-Log "Notifier process started successfully."
+    }
+    catch {
+        Write-Log "Failed to start notifier process: $_"
+    }
+}
+
 Write-Log "Watchdog script started."
+
+# Counter to track when to do a git check (every 5 minutes = 20 cycles of 15s)
+$GitCheckCounter = 0
+$GitCheckInterval = 20  # 20 x 15s = 5 minutes
 
 # Loop indefinitely
 while ($true) {
@@ -25,7 +49,44 @@ while ($true) {
         continue
     }
 
-    # Check if notifier.py is running
+    # ---- Git Auto-Pull Check (every 5 minutes) ----
+    $GitCheckCounter++
+    if ($GitCheckCounter -ge $GitCheckInterval) {
+        $GitCheckCounter = 0
+
+        if (Test-Path (Join-Path $ScriptDir ".git")) {
+            try {
+                # Fetch latest from origin silently
+                & $GitExe -C $ScriptDir fetch origin --quiet 2>$null
+
+                # Compare local HEAD vs remote main
+                $LocalHead  = & $GitExe -C $ScriptDir rev-parse HEAD 2>$null
+                $RemoteHead = & $GitExe -C $ScriptDir rev-parse origin/main 2>$null
+
+                if ($LocalHead -and $RemoteHead -and ($LocalHead -ne $RemoteHead)) {
+                    Write-Log "New version detected on GitHub (remote: $($RemoteHead.Substring(0,7))). Pulling and restarting..."
+
+                    # Stop running notifier
+                    Stop-Notifier
+
+                    # Pull latest changes (force overwrite local)
+                    & $GitExe -C $ScriptDir reset --hard origin/main 2>$null
+                    & $GitExe -C $ScriptDir pull origin main --ff-only 2>$null
+
+                    Write-Log "Git pull complete. Restarting notifier with new code..."
+                    Start-Sleep -Seconds 2
+                    Start-Notifier
+                    Start-Sleep -Seconds 13  # Skip the rest of the sleep cycle
+                    continue
+                }
+            }
+            catch {
+                Write-Log "Git check failed: $_"
+            }
+        }
+    }
+
+    # ---- Notifier Process Check ----
     $Processes = Get-CimInstance Win32_Process -Filter "Name like '%python%'" -ErrorAction SilentlyContinue | Where-Object {
         $_.CommandLine -like "*notifier.py*"
     }
@@ -39,24 +100,14 @@ while ($true) {
     if ($Processes -and $Processes.Count -gt 1) {
         Write-Log "Multiple notifier processes detected ($($Processes.Count)). Killing all and restarting one clean instance..."
         foreach ($P in $Processes) {
-            try {
-                Stop-Process -Id $P.ProcessId -Force -ErrorAction SilentlyContinue
-            }
-            catch {}
+            try { Stop-Process -Id $P.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
         }
         $Processes = $null
     }
 
     if (-not $Processes) {
         Write-Log "Notifier process is NOT running. Starting notifier..."
-        try {
-            # Start process in background
-            Start-Process -FilePath "python" -ArgumentList $NotifierScript -WindowStyle Hidden -WorkingDirectory $ScriptDir
-            Write-Log "Notifier process started successfully."
-        }
-        catch {
-            Write-Log "Failed to start notifier process: $_"
-        }
+        Start-Notifier
     }
 
     # Check status every 15 seconds
