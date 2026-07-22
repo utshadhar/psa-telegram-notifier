@@ -2817,7 +2817,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         reply_markup = {
                                             "keyboard": [
                                                 [{"text": "Default"}],
-                                                [{"text": "Current"}]
+                                                [{"text": "Current"}],
+                                                [{"text": "None"}]
                                             ],
                                             "one_time_keyboard": True,
                                             "resize_keyboard": True
@@ -2879,8 +2880,22 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         USER_CONVERSATION_STATE = None
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
+                                    elif text in ["none", "3"]:
+                                        # Turn checker off
+                                        var_name = meta["var"]
+                                        globals()[var_name] = 0
+                                        if meta["clear_args"]:
+                                            for args in meta["clear_args"]:
+                                                clear_aging_memory(*args)
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        msg = f"{meta['label']} checker is off."
+                                        send_telegram_notification(msg, config)
+                                        USER_CONVERSATION_STATE = None
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
                                     else:
-                                        msg = "Please select Default or Current."
+                                        msg = "Please select Default, Current, or None."
                                         send_telegram_notification(msg, config)
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
