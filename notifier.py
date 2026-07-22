@@ -2169,7 +2169,7 @@ def run_long_polling_loop(stop_event):
                 if res.get("ok"):
                     for update in res.get("result", []):
                         offset = update.get("update_id", 0) + 1
-                        message = update.get("message") or update.get("edited_message")
+                        message = update.get("message") or update.get("edited_message") or update.get("callback_query")
                         if message:
                             process_long_poll_update(update, config)
         except Exception as e:

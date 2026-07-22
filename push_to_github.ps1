@@ -19,7 +19,7 @@ Write-Output "Adding changes..."
 Write-Output "Committing..."
 & $git commit -m "Update notifier with simplified configurations, Render endpoints, and docs"
 Write-Output "Force pushing to main branch..."
-& $git push origin master:main --force
+& $git push origin main --force
 Write-Output "Done!"
 Pop-Location
 Pause
