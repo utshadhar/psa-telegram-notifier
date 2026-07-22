@@ -1380,6 +1380,12 @@ def check_and_send_pending_alert(business_date, config, force=False):
     """Checks if there is any pending data on the special check URL, and if so sends a Telegram alert."""
     template = config.get("psa_pending_check_url_template", "")
     if not template or "YOUR_" in template:
+        apis = config.get("apis", [])
+        psa_api = next((a for a in apis if "psa" in a.get("name", "").lower()), None)
+        if psa_api:
+            template = psa_api.get("url_template", "")
+            
+    if not template or "YOUR_" in template:
         return
         
     local_now = get_local_time(config)
@@ -1422,8 +1428,14 @@ def pending_alert_scheduler_loop(stop_event):
     print(f"[{datetime.datetime.now()}] Background pending alert scheduler thread started.")
     while not stop_event.is_set():
         config = load_config()
-        # Only check if configured
+        # Only check if configured or fallback PSA API is available
         template = config.get("psa_pending_check_url_template", "")
+        if not template or "YOUR_" in template:
+            apis = config.get("apis", [])
+            psa_api = next((a for a in apis if "psa" in a.get("name", "").lower()), None)
+            if psa_api:
+                template = psa_api.get("url_template", "")
+                
         if not template or "YOUR_" in template:
             if stop_event.wait(60):
                 break
@@ -1732,25 +1744,19 @@ def run_scheduled_check(business_date=None, force=False):
             print(f"[{datetime.datetime.now()}] Outside monitoring hours and force=False. Check skipped.")
             return False
 
+    local_now = get_local_time(config)
+    # 11:01 PM to 12:59 AM check: only run check_and_send_pending_alert
+    if is_in_10min_psa_window(local_now) and not force:
+        print(f"[{datetime.datetime.now()}] Inside 11:01 PM-12:59 AM window. Running ONLY PSA pending filter check.")
+        try:
+            check_and_send_pending_alert(business_date, config, force=True)
+            return True
+        except Exception as e:
+            print(f"[{datetime.datetime.now()}] Error during PSA pending filter check: {e}")
+            return False
+
     try:
         stats = fetch_all_apis(business_date, config)
-        # 11:01 PM to 12:59 AM check: send compact pending filter report if there are pending in PSA
-        local_now = get_local_time(config)
-        if is_in_10min_psa_window(local_now) and not force:
-            psa_stats = stats.get("PSA", {})
-            p_so = psa_stats.get("total_pending_so", 0)
-            p_co = psa_stats.get("total_pending_co", 0)
-            total_pending_psa = p_so + p_co
-            if total_pending_psa == 0:
-                print(f"[{datetime.datetime.now()}] Inside 11:01 PM-12:59 AM window but 0 pending in PSA. Notification skipped.")
-                return False
-            else:
-                compact_msg = f"PSA Data still pending (Pending SO: {p_so}, Pending CO: {p_co})"
-                ok, err = send_telegram_notification(compact_msg, config)
-                if ok:
-                    check_and_send_pending_alert(business_date, config)
-                return ok
-
         msg = format_telegram_message(stats, business_date, config)
         ok, err = send_telegram_notification(msg, config)
         if ok:
