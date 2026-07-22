@@ -2752,7 +2752,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         update_render_env_vars_async()
                                         msg = f"{meta['default_prompt']} = {val} min"
                                         send_telegram_notification(msg, config)
-                                        ask_msg = f"want to on {meta['label']}?"
+                                        ask_msg = f"want to on {meta['label']} using default value?"
                                         reply_markup = {
                                             "inline_keyboard": [
                                                 [
@@ -2762,7 +2762,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                             ]
                                         }
                                         send_telegram_notification(ask_msg, config, reply_markup=reply_markup)
-                                        USER_CONVERSATION_STATE = f"AWAITING_ON_CONFIRM_{feat_key.upper()}"
+                                        USER_CONVERSATION_STATE = f"AWAITING_DEFAULT_ON_CONFIRM_{feat_key.upper()}"
                                         self.send_json_response(200, {"status": "ok", "message": ask_msg})
                                         return
 
@@ -2819,43 +2819,66 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         update_render_env_vars_async()
                                         msg = f"{meta['current_prompt']} = {val} min"
                                         send_telegram_notification(msg, config)
-                                        ask_msg = f"want to on {meta['label']}?"
+                                        ask_msg = f"want to on {meta['label']} using current value?"
                                         reply_markup = {
                                             "inline_keyboard": [
                                                 [
                                                     {"text": "Yes", "callback_data": "yes"},
                                                     {"text": "No", "callback_data": "no"}
                                                 ]
-                                             ]
-                                         }
+                                            ]
+                                        }
                                         send_telegram_notification(ask_msg, config, reply_markup=reply_markup)
-                                        USER_CONVERSATION_STATE = f"AWAITING_ON_CONFIRM_{feat_key.upper()}"
+                                        USER_CONVERSATION_STATE = f"AWAITING_CURRENT_ON_CONFIRM_{feat_key.upper()}"
                                         self.send_json_response(200, {"status": "ok", "message": ask_msg})
                                         return
 
-                            # 4. AWAITING_ON_CONFIRM_FEAT
-                            elif USER_CONVERSATION_STATE.startswith("AWAITING_ON_CONFIRM_"):
-                                feat_key = USER_CONVERSATION_STATE[len("AWAITING_ON_CONFIRM_"):].lower()
+                            # 4. AWAITING_DEFAULT_ON_CONFIRM_FEAT
+                            elif USER_CONVERSATION_STATE.startswith("AWAITING_DEFAULT_ON_CONFIRM_"):
+                                feat_key = USER_CONVERSATION_STATE[len("AWAITING_DEFAULT_ON_CONFIRM_"):].lower()
                                 meta = CONV_FEATURE_MAP.get(feat_key)
                                 if meta:
                                     if text in ["yes", "y"]:
-                                        # Ask Default or Current
-                                        USER_CONVERSATION_STATE = f"AWAITING_ON_CHOICE_{feat_key.upper()}"
-                                        msg = "Select Default or Current:"
-                                        reply_markup = {
-                                            "inline_keyboard": [
-                                                [
-                                                    {"text": "Default", "callback_data": "default"},
-                                                    {"text": "Current", "callback_data": "current"},
-                                                    {"text": "None", "callback_data": "none"}
-                                                ]
-                                            ]
-                                        }
-                                        send_telegram_notification(msg, config, reply_markup=reply_markup)
+                                        var_name = meta["var"]
+                                        default_var = meta["default_var"]
+                                        default_val = globals()[default_var]
+                                        globals()[var_name] = default_val
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        msg = f"{meta['label']} checker is on. {meta['label']} = {default_val} min."
+                                        send_telegram_notification(msg, config)
+                                        USER_CONVERSATION_STATE = None
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
                                     elif text in ["no", "n"]:
-                                        # Turn checker off
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        msg = f"{meta['label']} default updated. Checker remains unchanged."
+                                        send_telegram_notification(msg, config)
+                                        USER_CONVERSATION_STATE = None
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+                                    else:
+                                        msg = "Please select Yes or No."
+                                        send_telegram_notification(msg, config)
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+
+                            # 5. AWAITING_CURRENT_ON_CONFIRM_FEAT
+                            elif USER_CONVERSATION_STATE.startswith("AWAITING_CURRENT_ON_CONFIRM_"):
+                                feat_key = USER_CONVERSATION_STATE[len("AWAITING_CURRENT_ON_CONFIRM_"):].lower()
+                                meta = CONV_FEATURE_MAP.get(feat_key)
+                                if meta:
+                                    if text in ["yes", "y"]:
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        current_val = globals()[meta["var"]]
+                                        msg = f"{meta['label']} checker is on. {meta['label']} = {current_val} min."
+                                        send_telegram_notification(msg, config)
+                                        USER_CONVERSATION_STATE = None
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+                                    elif text in ["no", "n"]:
                                         var_name = meta["var"]
                                         globals()[var_name] = 0
                                         if meta["clear_args"]:
@@ -2870,60 +2893,6 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         return
                                     else:
                                         msg = "Please select Yes or No."
-                                        send_telegram_notification(msg, config)
-                                        self.send_json_response(200, {"status": "ok", "message": msg})
-                                        return
-
-                            # 5. AWAITING_ON_CHOICE_FEAT
-                            elif USER_CONVERSATION_STATE.startswith("AWAITING_ON_CHOICE_"):
-                                feat_key = USER_CONVERSATION_STATE[len("AWAITING_ON_CHOICE_"):].lower()
-                                meta = CONV_FEATURE_MAP.get(feat_key)
-                                if meta:
-                                    if text in ["default", "1"]:
-                                        # Set current = default
-                                        default_var = meta["default_var"]
-                                        default_val = globals()[default_var]
-                                        var_name = meta["var"]
-                                        globals()[var_name] = default_val
-                                        save_thresholds()
-                                        update_render_env_vars_async()
-                                        msg = f"{meta['label']} checker is on. {meta['label']} = {default_val} min."
-                                        send_telegram_notification(msg, config)
-                                        USER_CONVERSATION_STATE = None
-                                        self.send_json_response(200, {"status": "ok", "message": msg})
-                                        return
-                                    elif text in ["current", "2"]:
-                                        # If current not set, current = default. Else current is used.
-                                        var_name = meta["var"]
-                                        current_val = globals()[var_name]
-                                        default_var = meta["default_var"]
-                                        default_val = globals()[default_var]
-                                        if current_val <= 0:
-                                            current_val = default_val
-                                            globals()[var_name] = current_val
-                                        save_thresholds()
-                                        update_render_env_vars_async()
-                                        msg = f"{meta['label']} checker is on. {meta['label']} = {current_val} min."
-                                        send_telegram_notification(msg, config)
-                                        USER_CONVERSATION_STATE = None
-                                        self.send_json_response(200, {"status": "ok", "message": msg})
-                                        return
-                                    elif text in ["none", "3"]:
-                                        # Turn checker off
-                                        var_name = meta["var"]
-                                        globals()[var_name] = 0
-                                        if meta["clear_args"]:
-                                            for args in meta["clear_args"]:
-                                                clear_aging_memory(*args)
-                                        save_thresholds()
-                                        update_render_env_vars_async()
-                                        msg = f"{meta['label']} checker is off."
-                                        send_telegram_notification(msg, config)
-                                        USER_CONVERSATION_STATE = None
-                                        self.send_json_response(200, {"status": "ok", "message": msg})
-                                        return
-                                    else:
-                                        msg = "Please select Default, Current, or None."
                                         send_telegram_notification(msg, config)
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
