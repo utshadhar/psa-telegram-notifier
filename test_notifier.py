@@ -324,33 +324,36 @@ class TestPSATelegramNotifier(unittest.TestCase):
         mock_send.assert_not_called()
 
     def test_is_time_for_pending_alert(self):
-        """Test the late-night pending check scheduler active window calculation."""
-        # 1. Overnight window: 23:00 to 01:05 (end_hour=1)
+        """Test the late-night pending check scheduler active window calculation (23:01 to 00:59)."""
         end_hour = 1
         
-        # Scenario 1.1: Before 23:00 (10:59 PM) -> False
+        # Scenario 1.1: Before 23:01 (10:59 PM) -> False
         dt_before = datetime.datetime(2026, 7, 8, 22, 59, 0)
         self.assertFalse(notifier.is_time_for_pending_alert(dt_before, end_hour))
         
-        # Scenario 1.2: Exactly 23:00 (11:00 PM) -> True
-        dt_start = datetime.datetime(2026, 7, 8, 23, 0, 0)
+        # Scenario 1.2: Exactly 23:00 (11:00 PM) -> False
+        dt_exact_11 = datetime.datetime(2026, 7, 8, 23, 0, 0)
+        self.assertFalse(notifier.is_time_for_pending_alert(dt_exact_11, end_hour))
+        
+        # Scenario 1.3: Active time (11:02 PM) -> True
+        dt_start = datetime.datetime(2026, 7, 8, 23, 2, 0)
         self.assertTrue(notifier.is_time_for_pending_alert(dt_start, end_hour))
         
-        # Scenario 1.3: Midnight (00:00) -> True
+        # Scenario 1.4: Midnight (00:00) -> True
         dt_midnight = datetime.datetime(2026, 7, 9, 0, 0, 0)
         self.assertTrue(notifier.is_time_for_pending_alert(dt_midnight, end_hour))
         
-        # Scenario 1.4: Within 5 min grace of end_hour (01:04 AM) -> True
-        dt_grace = datetime.datetime(2026, 7, 9, 1, 4, 0)
-        self.assertTrue(notifier.is_time_for_pending_alert(dt_grace, end_hour))
+        # Scenario 1.5: Active time (12:30 AM next day) -> True
+        dt_active = datetime.datetime(2026, 7, 9, 0, 30, 0)
+        self.assertTrue(notifier.is_time_for_pending_alert(dt_active, end_hour))
         
-        # Scenario 1.5: After grace of end_hour (01:06 AM) -> False
-        dt_after = datetime.datetime(2026, 7, 9, 1, 6, 0)
+        # Scenario 1.6: Exactly 12:59 AM next day -> True
+        dt_exact_end = datetime.datetime(2026, 7, 9, 0, 59, 0)
+        self.assertTrue(notifier.is_time_for_pending_alert(dt_exact_end, end_hour))
+        
+        # Scenario 1.7: After window (01:00 AM next day) -> False
+        dt_after = datetime.datetime(2026, 7, 9, 1, 0, 0)
         self.assertFalse(notifier.is_time_for_pending_alert(dt_after, end_hour))
-        
-        # Scenario 1.6: Morning (09:00 AM) -> False
-        dt_morning = datetime.datetime(2026, 7, 8, 9, 0, 0)
-        self.assertFalse(notifier.is_time_for_pending_alert(dt_morning, end_hour))
 
     @patch('urllib.request.urlopen')
     @patch('notifier.send_telegram_notification')
@@ -783,66 +786,98 @@ class TestPSATelegramNotifier(unittest.TestCase):
                 handler.headers = {'Content-Length': str(len(body_bytes))}
                 handler.rfile = io.BytesIO(body_bytes)
                 handler.do_POST()
-                        # 1. Trigger f1 -> Bot should set state to AWAITING_VAL_F1
+                
+            # 1. Trigger f1 -> Bot should set state to SELECT_MODE_F1
             notifier.USER_CONVERSATION_STATE = None
             simulate_webhook_msg("f1")
-            self.assertEqual(notifier.USER_CONVERSATION_STATE, "AWAITING_VAL_F1")
+            self.assertEqual(notifier.USER_CONVERSATION_STATE, "SELECT_MODE_F1")
             mock_send.assert_called_once()
-            self.assertIn("psa_so_pending_threshold_minutes", mock_send.call_args[0][0])
+            self.assertIn("Update options for psa_so_pending_threshold_minutes", mock_send.call_args[0][0])
             mock_send.reset_mock()
  
-            # 2. User replies with text "23" -> updates PSA_SO_PENDING_THRESHOLD_MINUTES and _DEFAULT to 23
-            simulate_webhook_msg("23")
+            # 2. Reply Default -> state AWAITING_DEFAULT_VAL_F1
+            simulate_webhook_msg("default")
+            self.assertEqual(notifier.USER_CONVERSATION_STATE, "AWAITING_DEFAULT_VAL_F1")
+            mock_send.assert_called_with("psa_default_so_pending_threshold_minutes", {"telegram_chat_id": "123"})
+            mock_send.reset_mock()
+ 
+            # 3. User replies with text "26" -> updates PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT to 26 and asks if want to turn on
+            simulate_webhook_msg("26")
+            self.assertEqual(notifier.USER_CONVERSATION_STATE, "AWAITING_ON_CONFIRM_F1")
+            self.assertEqual(notifier.PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, 26)
+            mock_send.assert_any_call("psa_default_so_pending_threshold_minutes = 26 min", {"telegram_chat_id": "123"})
+            from unittest.mock import ANY
+            mock_send.assert_any_call("want to on psa_so_pending_threshold_minutes?", {"telegram_chat_id": "123"}, reply_markup=ANY)
+            mock_send.reset_mock()
+ 
+            # 4. Reply yes to turn on -> state AWAITING_ON_CHOICE_F1
+            simulate_webhook_msg("yes")
+            self.assertEqual(notifier.USER_CONVERSATION_STATE, "AWAITING_ON_CHOICE_F1")
+            mock_send.assert_called_with("Select Default or Current:", {"telegram_chat_id": "123"}, reply_markup=ANY)
+            mock_send.reset_mock()
+ 
+            # 5. Reply default -> sets current = default -> state None
+            simulate_webhook_msg("default")
             self.assertEqual(notifier.USER_CONVERSATION_STATE, None)
-            self.assertEqual(notifier.PSA_SO_PENDING_THRESHOLD_MINUTES, 23)
-            self.assertEqual(notifier.PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, 23)
-            mock_send.assert_called_with("psa_so_pending_threshold_minutes set to 23 min.", {"telegram_chat_id": "123"})
+            self.assertEqual(notifier.PSA_SO_PENDING_THRESHOLD_MINUTES, 26)
+            mock_send.assert_called_with("psa_so_pending_threshold_minutes checker is on. psa_so_pending_threshold_minutes = 26 min.", {"telegram_chat_id": "123"})
             mock_send.reset_mock()
  
-            # 3. Turn off f1 directly via shortcut
+            # 6. Turn off f1 directly via shortcut
             simulate_webhook_msg("o1")
             self.assertEqual(notifier.PSA_SO_PENDING_THRESHOLD_MINUTES, 0)
-            self.assertEqual(notifier.PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, 0)
             mock_send.assert_called_with("psa_so_pending_threshold_minutes checker is off.", {"telegram_chat_id": "123"})
             mock_send.reset_mock()
  
-            # 4. Trigger f6
+            # 7. Trigger f6
             simulate_webhook_msg("f6")
-            self.assertEqual(notifier.USER_CONVERSATION_STATE, "AWAITING_VAL_F6")
+            self.assertEqual(notifier.USER_CONVERSATION_STATE, "SELECT_MODE_F6")
             mock_send.assert_called_once()
-            self.assertIn("SAP_Contract_pending_threshold_minutes", mock_send.call_args[0][0])
+            self.assertIn("Update options for SAP_Contract_pending_threshold_minutes", mock_send.call_args[0][0])
             mock_send.reset_mock()
  
-            # 5. User replies with text "7 min" -> updates CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES to 7
+            # 8. Reply current -> state AWAITING_CURRENT_VAL_F6
+            simulate_webhook_msg("current")
+            self.assertEqual(notifier.USER_CONVERSATION_STATE, "AWAITING_CURRENT_VAL_F6")
+            mock_send.assert_called_with("SAP_Contract_pending_threshold_minutes", {"telegram_chat_id": "123"})
+            mock_send.reset_mock()
+ 
+            # 9. User replies with text "7 min" -> updates CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES to 7
+            notifier.CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT = 10
             simulate_webhook_msg("7 min")
+            self.assertEqual(notifier.USER_CONVERSATION_STATE, "AWAITING_ON_CONFIRM_F6")
+            self.assertEqual(notifier.CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES, 7)
+            mock_send.assert_any_call("SAP_Contract_pending_threshold_minutes = 7 min", {"telegram_chat_id": "123"})
+            mock_send.assert_any_call("want to on SAP_Contract_pending_threshold_minutes?", {"telegram_chat_id": "123"}, reply_markup=ANY)
+            mock_send.reset_mock()
+
+            # 10. Reply yes -> state AWAITING_ON_CHOICE_F6
+            simulate_webhook_msg("yes")
+            self.assertEqual(notifier.USER_CONVERSATION_STATE, "AWAITING_ON_CHOICE_F6")
+            mock_send.reset_mock()
+
+            # 11. Reply current -> state None
+            simulate_webhook_msg("current")
             self.assertEqual(notifier.USER_CONVERSATION_STATE, None)
             self.assertEqual(notifier.CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES, 7)
-            self.assertEqual(notifier.CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT, 7)
-            mock_send.assert_called_with("SAP_Contract_pending_threshold_minutes set to 7 min.", {"telegram_chat_id": "123"})
+            mock_send.assert_called_with("SAP_Contract_pending_threshold_minutes checker is on. SAP_Contract_pending_threshold_minutes = 7 min.", {"telegram_chat_id": "123"})
             mock_send.reset_mock()
  
-            # 6. Turn off f6 directly
+            # 12. Turn off f6 directly
             simulate_webhook_msg("f6 off")
             self.assertEqual(notifier.CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES, 0)
-            self.assertEqual(notifier.CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT, 0)
             mock_send.assert_called_with("SAP_Contract_pending_threshold_minutes checker is off.", {"telegram_chat_id": "123"})
             mock_send.reset_mock()
             
-            # 7. Trigger f3 and then interrupt with f4
+            # 13. Trigger cancel/None on f3
             simulate_webhook_msg("f3")
-            self.assertEqual(notifier.USER_CONVERSATION_STATE, "AWAITING_VAL_F3")
+            self.assertEqual(notifier.USER_CONVERSATION_STATE, "SELECT_MODE_F3")
             mock_send.reset_mock()
-            
-            simulate_webhook_msg("/f4")
-            self.assertEqual(notifier.USER_CONVERSATION_STATE, "AWAITING_VAL_F4")
-            mock_send.assert_called_once()
-            self.assertIn("Smartsales_so_pending_threshold_minutes", mock_send.call_args[0][0])
-            mock_send.reset_mock()
- 
-            simulate_webhook_msg("15")
+            simulate_webhook_msg("none")
             self.assertEqual(notifier.USER_CONVERSATION_STATE, None)
+            mock_send.assert_called_with("Smartsales_obd_pending_threshold_minutes checker is off.", {"telegram_chat_id": "123"})
             mock_send.reset_mock()
- 
+
             simulate_webhook_msg("feature")
             mock_send.assert_called_once()
             feature_msg = mock_send.call_args[0][0]

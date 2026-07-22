@@ -136,8 +136,8 @@ OBD_OFFHOURS_START_HOUR_DEFAULT = 0
 OBD_OFFHOURS_END_HOUR = 0
 OBD_OFFHOURS_END_HOUR_DEFAULT = 0
 
-CALLMEBOT_USER = "@UshDhar, +8801838262248"
-CALLMEBOT_USER_DEFAULT = "@UshDhar, +8801838262248"
+CALLMEBOT_USER = "@UshDhar"
+CALLMEBOT_USER_DEFAULT = "+8801838262248"
 
 def is_hour_in_range(hour, start, end):
     """Checks if an hour is within a start/end window, supporting midnight wrap-around and 24h mode."""
@@ -987,6 +987,26 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
         so_keys = ["TransactionId", "transactionid", "Transaction_ID", "transaction_id", "Plan_Id", "plan_id", "planid", "pay_id", "payid"]
         co_keys = ["pay_id", "payid", "PayId", "Transaction_ID", "TransactionId", "transaction_id", "transactionid"]
 
+    def has_non_null_key(item, keys):
+        for key in keys:
+            if key in item and item[key] is not None:
+                return True
+            k_lower = key.lower()
+            for k, val in item.items():
+                if k.lower() == k_lower and val is not None:
+                    return True
+        return False
+
+    def has_key_case_insensitive(item, keys):
+        for key in keys:
+            if key in item:
+                return True
+            k_lower = key.lower()
+            for k in item.keys():
+                if k.lower() == k_lower:
+                    return True
+        return False
+
     def get_unique_id(item, keys):
         for key in keys:
             if key in item:
@@ -1013,6 +1033,9 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
                         return str(val).strip()
         return "Unknown"
 
+    so_indicators = ["soNumber", "so_number", "doNumber", "do_number"]
+    co_indicators = ["coNumber", "co_number", "contractNumber", "contract_number", "pay_id", "payid", "PayId"]
+
     # 1. Process Sales Orders (SO) / OBD
     if default_process is None or default_process.upper() == "SO":
         for item in raw_so_list:
@@ -1023,7 +1046,10 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
             if default_process is not None:
                 is_so = (default_process.upper() == "SO")
             else:
-                is_so = (process == "SO" or "soNumber" in item or ("do_number" in item and "contractNumber" not in item))
+                if process in ("SO", "CO", "CONTRACT", "COLLECTION"):
+                    is_so = (process == "SO")
+                else:
+                    is_so = (has_key_case_insensitive(item, so_indicators) or ("do_number" in item and not has_non_null_key(item, co_indicators)))
             if not is_so:
                 continue
 
@@ -1051,38 +1077,31 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
             if default_process is not None:
                 is_co = (default_process.upper() == "CO")
             else:
-                is_co = (process in ("CO", "CONTRACT", "COLLECTION") or "coNumber" in item or "contractNumber" in item)
+                if process in ("SO", "CO", "CONTRACT", "COLLECTION"):
+                    is_co = (process in ("CO", "CONTRACT", "COLLECTION"))
+                else:
+                    is_co = has_non_null_key(item, co_indicators)
             if not is_co:
                 continue
 
             server = get_server_allocation(item)
-            tx_id = get_unique_id(item, co_keys)
-            if tx_id is None:
+            
+            # Get the unique ID for CO, fallback to TransactionId if pay_id is missing
+            co_id = get_unique_id(item, ["pay_id", "payid", "PayId"])
+            if co_id is None:
+                co_id = get_unique_id(item, ["Transaction_ID", "TransactionId", "transaction_id", "transactionid"])
+                    
+            if co_id is None:
                 continue
 
             if is_co_pending(item, api_name):
-                pay_id = get_unique_id(item, ["pay_id", "payid", "PayId"]) if ("coNumber" in item and not is_contract_api) else tx_id
-                if pay_id:
-                    active_pending_ids.add(pay_id)
-                    track_and_alert_aging(pay_id, server, "CO", api_name, config)
+                active_pending_ids.add(co_id)
+                track_and_alert_aging(co_id, server, "CO", api_name, config)
 
-            if not filter_pending:
+            if not filter_pending or is_co_pending(item, api_name):
                 if server not in server_co_ids:
                     server_co_ids[server] = set()
-                server_co_ids[server].add(tx_id)
-            else:
-                if "coNumber" in item and not is_contract_api:
-                    pay_id = get_unique_id(item, ["pay_id", "payid", "PayId"])
-                    if pay_id is not None:
-                        if is_co_pending(item, api_name):
-                            if server not in server_co_ids:
-                                server_co_ids[server] = set()
-                            server_co_ids[server].add(pay_id)
-                else:
-                    if is_co_pending(item, api_name):
-                        if server not in server_co_ids:
-                            server_co_ids[server] = set()
-                        server_co_ids[server].add(tx_id)
+                server_co_ids[server].add(co_id)
 
     # Compile server statistics
     all_servers = set(server_so_ids.keys()) | set(server_co_ids.keys())
@@ -1347,22 +1366,14 @@ def send_telegram_notification(message, config, reply_markup=None):
 
 def is_time_for_pending_alert(dt, end_hour):
     """
-    Checks if local time is between 23:00 (11:00 PM) and the monitoring end hour.
-    E.g. if end_hour is 1 (1 AM next day), active window is 23:00 to 01:05 (including grace).
+    Checks if local time is between 11:01 PM (23:01) and 12:59 AM next day (00:59).
     """
     current_time = dt.time()
-    start_time = datetime.time(23, 0, 0)
-    end_time = datetime.time(end_hour, 5, 0)  # 5-minute grace period
+    start_time = datetime.time(23, 1, 0)
+    end_time = datetime.time(0, 59, 0)
     
-    if end_hour < 23:
-        # Spans overnight, e.g. 23:00 to 01:05 next day
-        if current_time >= start_time or current_time <= end_time:
-            return True
-    else:
-        # Same day, e.g. 23:00 to 23:05
-        if start_time <= current_time <= end_time:
-            return True
-            
+    if current_time >= start_time or current_time <= end_time:
+        return True
     return False
 
 def check_and_send_pending_alert(business_date, config, force=False):
@@ -2093,10 +2104,24 @@ def telegram_api_call(method, payload, config):
 
 def start_feature_conversation(handler, feat_key, config):
     global USER_CONVERSATION_STATE
-    USER_CONVERSATION_STATE = f"AWAITING_VAL_{feat_key.upper()}"
+    USER_CONVERSATION_STATE = f"SELECT_MODE_{feat_key.upper()}"
     meta = CONV_FEATURE_MAP[feat_key]
-    msg = f"Please enter the value for {meta['label']}:"
-    send_telegram_notification(msg, config)
+    msg = (
+        f"Update options for {meta['label']}:\n"
+        "1. Default\n"
+        "2. Current\n"
+        "3. None"
+    )
+    reply_markup = {
+        "keyboard": [
+            [{"text": "Default"}],
+            [{"text": "Current"}],
+            [{"text": "None"}]
+        ],
+        "one_time_keyboard": True,
+        "resize_keyboard": True
+    }
+    send_telegram_notification(msg, config, reply_markup=reply_markup)
     handler.send_json_response(200, {"status": "ok", "message": msg})
 
 def handle_feature_trigger(handler, feat_key, config):
@@ -2130,7 +2155,7 @@ def run_long_polling_loop(stop_event):
                 if res.get("ok"):
                     for update in res.get("result", []):
                         offset = update.get("update_id", 0) + 1
-                        message = update.get("message") or update.get("edited_message") or update.get("callback_query")
+                        message = update.get("message") or update.get("edited_message")
                         if message:
                             process_long_poll_update(update, config)
         except Exception as e:
@@ -2495,6 +2520,32 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                     "status": "error",
                     "message": f"Trigger operation failed: {e}"
                 })
+        elif path == '/stop_render':
+            api_key = config.get("RENDER_API_KEY") or os.environ.get("RENDER_API_KEY")
+            service_id = config.get("RENDER_SERVICE_ID") or os.environ.get("RENDER_SERVICE_ID")
+            if not api_key or not service_id:
+                self.send_json_response(400, {"error": "RENDER_API_KEY or RENDER_SERVICE_ID not configured"})
+                return
+            url = f"https://api.render.com/v1/services/{service_id}/suspend"
+            req = urllib.request.Request(url, headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"}, method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    self.send_json_response(200, {"status": "success", "message": "Render service suspended successfully"})
+            except Exception as e:
+                self.send_json_response(500, {"error": f"Failed to suspend Render service: {e}"})
+        elif path == '/resume_render':
+            api_key = config.get("RENDER_API_KEY") or os.environ.get("RENDER_API_KEY")
+            service_id = config.get("RENDER_SERVICE_ID") or os.environ.get("RENDER_SERVICE_ID")
+            if not api_key or not service_id:
+                self.send_json_response(400, {"error": "RENDER_API_KEY or RENDER_SERVICE_ID not configured"})
+                return
+            url = f"https://api.render.com/v1/services/{service_id}/resume"
+            req = urllib.request.Request(url, headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"}, method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    self.send_json_response(200, {"status": "success", "message": "Render service resumed successfully"})
+            except Exception as e:
+                self.send_json_response(500, {"error": f"Failed to resume Render service: {e}"})
         else:
             self.send_json_response(404, {"error": "Not Found"})
 
@@ -2578,14 +2629,55 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             USER_CONVERSATION_STATE = None
 
                         if USER_CONVERSATION_STATE:
-                            if USER_CONVERSATION_STATE.startswith("AWAITING_VAL_"):
-                                feat_key = USER_CONVERSATION_STATE[len("AWAITING_VAL_"):].lower()
+                            # 1. SELECT_MODE_FEAT
+                            if USER_CONVERSATION_STATE.startswith("SELECT_MODE_"):
+                                feat_key = USER_CONVERSATION_STATE[len("SELECT_MODE_"):].lower()
                                 meta = CONV_FEATURE_MAP.get(feat_key)
                                 if meta:
-                                    var_name = meta["var"]
+                                    if text in ["default", "1"]:
+                                        USER_CONVERSATION_STATE = f"AWAITING_DEFAULT_VAL_{feat_key.upper()}"
+                                        prompt = meta["default_prompt"]
+                                        send_telegram_notification(prompt, config)
+                                        self.send_json_response(200, {"status": "ok", "message": prompt})
+                                        return
+                                    elif text in ["current", "2"]:
+                                        USER_CONVERSATION_STATE = f"AWAITING_CURRENT_VAL_{feat_key.upper()}"
+                                        prompt = meta["current_prompt"]
+                                        send_telegram_notification(prompt, config)
+                                        self.send_json_response(200, {"status": "ok", "message": prompt})
+                                        return
+                                    elif text in ["none", "3"]:
+                                        var_name = meta["var"]
+                                        if meta.get("is_hour"):
+                                            cur_val = globals()[var_name]
+                                            msg = f"{var_name} = {cur_val}h"
+                                        elif meta.get("is_user"):
+                                            cur_val = globals()[var_name]
+                                            msg = f"CALLMEBOT_USER = {cur_val}"
+                                        else:
+                                            globals()[var_name] = 0
+                                            if meta["clear_args"]:
+                                                for args in meta["clear_args"]:
+                                                    clear_aging_memory(*args)
+                                            msg = f"{meta['label']} checker is off."
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        send_telegram_notification(msg, config)
+                                        USER_CONVERSATION_STATE = None
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+                                    else:
+                                        msg = "Please select Default, Current, or None."
+                                        send_telegram_notification(msg, config)
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+
+                            # 2. AWAITING_DEFAULT_VAL_FEAT
+                            elif USER_CONVERSATION_STATE.startswith("AWAITING_DEFAULT_VAL_"):
+                                feat_key = USER_CONVERSATION_STATE[len("AWAITING_DEFAULT_VAL_"):].lower()
+                                meta = CONV_FEATURE_MAP.get(feat_key)
+                                if meta:
                                     default_var = meta["default_var"]
-                                    
-                                    # Set values
                                     if meta.get("is_hour"):
                                         try:
                                             match = re.search(r'\d+', text)
@@ -2596,32 +2688,196 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                                 raise ValueError()
                                         except (ValueError, TypeError):
                                             val = meta["fallback_default"]
-                                        globals()[var_name] = val
                                         globals()[default_var] = val
-                                        msg = f"{meta['label']} set to {val}h."
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        msg = f"{default_var} = {val}h"
+                                        send_telegram_notification(msg, config)
+                                        USER_CONVERSATION_STATE = None
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
                                     elif meta.get("is_user"):
                                         val = str(text).strip()
-                                        globals()[var_name] = val
+                                        is_off = val.lower() in ["none", "off", "0", ""]
+                                        if is_off or not validate_callmebot_user_list(val):
+                                            val = meta["fallback_default"]
                                         globals()[default_var] = val
-                                        msg = f"{meta['label']} set to: {val}"
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        msg = f"{default_var} = {val}"
+                                        send_telegram_notification(msg, config)
+                                        USER_CONVERSATION_STATE = None
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
                                     else:
+                                        try:
+                                            match = re.search(r'-?\d+', text)
+                                            if not match:
+                                                raise ValueError()
+                                            val = int(match.group())
+                                            if val <= 0:
+                                                raise ValueError()
+                                        except (ValueError, TypeError):
+                                            val = meta["fallback_default"]
+                                        globals()[default_var] = val
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        msg = f"{meta['default_prompt']} = {val} min"
+                                        send_telegram_notification(msg, config)
+                                        ask_msg = f"want to on {meta['label']}?"
+                                        reply_markup = {
+                                            "keyboard": [[{"text": "Yes"}], [{"text": "No"}]],
+                                            "one_time_keyboard": True,
+                                            "resize_keyboard": True
+                                        }
+                                        send_telegram_notification(ask_msg, config, reply_markup=reply_markup)
+                                        USER_CONVERSATION_STATE = f"AWAITING_ON_CONFIRM_{feat_key.upper()}"
+                                        self.send_json_response(200, {"status": "ok", "message": ask_msg})
+                                        return
+
+                            # 3. AWAITING_CURRENT_VAL_FEAT
+                            elif USER_CONVERSATION_STATE.startswith("AWAITING_CURRENT_VAL_"):
+                                feat_key = USER_CONVERSATION_STATE[len("AWAITING_CURRENT_VAL_"):].lower()
+                                meta = CONV_FEATURE_MAP.get(feat_key)
+                                if meta:
+                                    var_name = meta["var"]
+                                    default_var = meta["default_var"]
+                                    if meta.get("is_hour"):
                                         try:
                                             match = re.search(r'\d+', text)
                                             if not match:
                                                 raise ValueError()
                                             val = int(match.group())
+                                            if not (0 <= val <= 24):
+                                                raise ValueError()
                                         except (ValueError, TypeError):
-                                            val = meta["fallback_default"]
+                                            val = globals()[default_var]
                                         globals()[var_name] = val
-                                        globals()[default_var] = val
-                                        msg = f"{meta['label']} set to {val} min."
-                                        
-                                    save_thresholds()
-                                    update_render_env_vars_async()
-                                    send_telegram_notification(msg, config)
-                                    USER_CONVERSATION_STATE = None
-                                    self.send_json_response(200, {"status": "ok", "message": msg})
-                                    return
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        msg = f"{var_name} = {val}h"
+                                        send_telegram_notification(msg, config)
+                                        USER_CONVERSATION_STATE = None
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+                                    elif meta.get("is_user"):
+                                        val = str(text).strip()
+                                        is_off = val.lower() in ["none", "off", "0", ""]
+                                        if is_off or not validate_callmebot_user_list(val):
+                                            val = globals()[default_var]
+                                        globals()[var_name] = val
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        msg = f"CALLMEBOT_USER = {val}"
+                                        send_telegram_notification(msg, config)
+                                        USER_CONVERSATION_STATE = None
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+                                    else:
+                                        try:
+                                            match = re.search(r'-?\d+', text)
+                                            if not match:
+                                                raise ValueError()
+                                            val = int(match.group())
+                                            if val <= 0:
+                                                raise ValueError()
+                                        except (ValueError, TypeError):
+                                            val = globals()[default_var]
+                                        globals()[var_name] = val
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        msg = f"{meta['current_prompt']} = {val} min"
+                                        send_telegram_notification(msg, config)
+                                        ask_msg = f"want to on {meta['label']}?"
+                                        reply_markup = {
+                                            "keyboard": [[{"text": "Yes"}], [{"text": "No"}]],
+                                            "one_time_keyboard": True,
+                                            "resize_keyboard": True
+                                        }
+                                        send_telegram_notification(ask_msg, config, reply_markup=reply_markup)
+                                        USER_CONVERSATION_STATE = f"AWAITING_ON_CONFIRM_{feat_key.upper()}"
+                                        self.send_json_response(200, {"status": "ok", "message": ask_msg})
+                                        return
+
+                            # 4. AWAITING_ON_CONFIRM_FEAT
+                            elif USER_CONVERSATION_STATE.startswith("AWAITING_ON_CONFIRM_"):
+                                feat_key = USER_CONVERSATION_STATE[len("AWAITING_ON_CONFIRM_"):].lower()
+                                meta = CONV_FEATURE_MAP.get(feat_key)
+                                if meta:
+                                    if text in ["yes", "y"]:
+                                        # Ask Default or Current
+                                        USER_CONVERSATION_STATE = f"AWAITING_ON_CHOICE_{feat_key.upper()}"
+                                        msg = "Select Default or Current:"
+                                        reply_markup = {
+                                            "keyboard": [
+                                                [{"text": "Default"}],
+                                                [{"text": "Current"}]
+                                            ],
+                                            "one_time_keyboard": True,
+                                            "resize_keyboard": True
+                                        }
+                                        send_telegram_notification(msg, config, reply_markup=reply_markup)
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+                                    elif text in ["no", "n"]:
+                                        # Turn checker off
+                                        var_name = meta["var"]
+                                        globals()[var_name] = 0
+                                        if meta["clear_args"]:
+                                            for args in meta["clear_args"]:
+                                                clear_aging_memory(*args)
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        msg = f"{meta['label']} checker is off."
+                                        send_telegram_notification(msg, config)
+                                        USER_CONVERSATION_STATE = None
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+                                    else:
+                                        msg = "Please select Yes or No."
+                                        send_telegram_notification(msg, config)
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+
+                            # 5. AWAITING_ON_CHOICE_FEAT
+                            elif USER_CONVERSATION_STATE.startswith("AWAITING_ON_CHOICE_"):
+                                feat_key = USER_CONVERSATION_STATE[len("AWAITING_ON_CHOICE_"):].lower()
+                                meta = CONV_FEATURE_MAP.get(feat_key)
+                                if meta:
+                                    if text in ["default", "1"]:
+                                        # Set current = default
+                                        default_var = meta["default_var"]
+                                        default_val = globals()[default_var]
+                                        var_name = meta["var"]
+                                        globals()[var_name] = default_val
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        msg = f"{meta['label']} checker is on. {meta['label']} = {default_val} min."
+                                        send_telegram_notification(msg, config)
+                                        USER_CONVERSATION_STATE = None
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+                                    elif text in ["current", "2"]:
+                                        # If current not set, current = default. Else current is used.
+                                        var_name = meta["var"]
+                                        current_val = globals()[var_name]
+                                        default_var = meta["default_var"]
+                                        default_val = globals()[default_var]
+                                        if current_val <= 0:
+                                            current_val = default_val
+                                            globals()[var_name] = current_val
+                                        save_thresholds()
+                                        update_render_env_vars_async()
+                                        msg = f"{meta['label']} checker is on. {meta['label']} = {current_val} min."
+                                        send_telegram_notification(msg, config)
+                                        USER_CONVERSATION_STATE = None
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+                                    else:
+                                        msg = "Please select Default or Current."
+                                        send_telegram_notification(msg, config)
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
 
                         # Check if user sent off shortcuts: o1-o9, f1_off-f9_off, f1 off-f9 off
                         off_match = re.match(r'^(?:/)?(?:o([1-9])|f([1-9])_off|f([1-9])\s+off)$', text)
@@ -2631,13 +2887,9 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             meta = CONV_FEATURE_MAP.get(feat_key)
                             if meta:
                                 var_name = meta["var"]
-                                default_var = meta.get("default_var")
                                 globals()[var_name] = 0
-                                if default_var:
-                                    globals()[default_var] = 0
                                 if num == 7:
                                     globals()["CALLMEBOT_USER"] = "none"
-                                    globals()["CALLMEBOT_USER_DEFAULT"] = "none"
                                 if meta["clear_args"]:
                                     for args in meta["clear_args"]:
                                         clear_aging_memory(*args)
@@ -2978,32 +3230,6 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                     "status": "error",
                     "message": f"Trigger operation failed: {e}"
                 })
-        elif path == '/stop_render':
-            api_key = config.get("RENDER_API_KEY") or os.environ.get("RENDER_API_KEY")
-            service_id = config.get("RENDER_SERVICE_ID") or os.environ.get("RENDER_SERVICE_ID")
-            if not api_key or not service_id:
-                self.send_json_response(400, {"error": "RENDER_API_KEY or RENDER_SERVICE_ID not configured"})
-                return
-            url = f"https://api.render.com/v1/services/{service_id}/suspend"
-            req = urllib.request.Request(url, headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"}, method="POST")
-            try:
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    self.send_json_response(200, {"status": "success", "message": "Render service suspended successfully"})
-            except Exception as e:
-                self.send_json_response(500, {"error": f"Failed to suspend Render service: {e}"})
-        elif path == '/resume_render':
-            api_key = config.get("RENDER_API_KEY") or os.environ.get("RENDER_API_KEY")
-            service_id = config.get("RENDER_SERVICE_ID") or os.environ.get("RENDER_SERVICE_ID")
-            if not api_key or not service_id:
-                self.send_json_response(400, {"error": "RENDER_API_KEY or RENDER_SERVICE_ID not configured"})
-                return
-            url = f"https://api.render.com/v1/services/{service_id}/resume"
-            req = urllib.request.Request(url, headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"}, method="POST")
-            try:
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    self.send_json_response(200, {"status": "success", "message": "Render service resumed successfully"})
-            except Exception as e:
-                self.send_json_response(500, {"error": f"Failed to resume Render service: {e}"})
         else:
             self.send_json_response(404, {"error": "Not Found"})
 
