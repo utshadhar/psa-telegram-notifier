@@ -741,33 +741,11 @@ def is_empty_value(val):
     return s == "" or s.lower() in ("null", "none", "-")
 
 def is_so_pending(item, api_name=None):
-    """Checks if a Sales Order is pending (has no sales order number)."""
-    name_lower = (api_name or "").lower()
-    # Any intranet/local APIs (API_2 to API_5) are treated as pending by default
-    if any(x in name_lower for x in ["api_2", "api_3", "api_4", "api_5", "smartsales", "cement", "contract", "freshlpg"]):
-        return True
-            
-    for key in ["soNumber", "so_number"]:
-        if key in item:
-            return is_empty_value(item.get(key))
+    """Checks if a Sales Order is pending (always True as all APIs are default pending)."""
     return True
 
 def is_co_pending(item, api_name=None):
-    """Checks if a Collection Order is pending (has no collection/contract number)."""
-    name_lower = (api_name or "").lower()
-    # Any intranet/local APIs (API_2 to API_5) are treated as pending by default
-    if any(x in name_lower for x in ["api_2", "api_3", "api_4", "api_5", "smartsales", "cement", "contract", "freshlpg"]):
-        return True
-        
-    for key in ["contractNumber", "coNumber", "co_number"]:
-        if key in item:
-            return is_empty_value(item.get(key))
-
-    # If coNumber/contractNumber key is not present, but soNumber is present and non-empty, it's a completed SO
-    for key in ["soNumber", "so_number"]:
-        if key in item and not is_empty_value(item.get(key)):
-            return False
-
+    """Checks if a Collection Order is pending (always True as all APIs are default pending)."""
     return True
 
 def clear_aging_memory(proc_type, api_name=None):

@@ -104,18 +104,18 @@ class TestPSATelegramNotifier(unittest.TestCase):
 
         stats = notifier.parse_psa_data(test_payload)
 
-        # Expected counts:
+        # Expected counts (with all items default pending):
         # S1:
-        # - SO unique: {"TX_100"} -> count 1
-        # - CO unique: {"PAY_100"} -> count 1
-        self.assertEqual(stats["server_stats"]["S1"]["pending_so"], 1)
-        self.assertEqual(stats["server_stats"]["S1"]["pending_co"], 1)
+        # - SO unique: {"TX_100", "TX_101", "TX_102"} -> count 3
+        # - CO unique: {"PAY_999", "PAY_100"} -> count 2
+        self.assertEqual(stats["server_stats"]["S1"]["pending_so"], 3)
+        self.assertEqual(stats["server_stats"]["S1"]["pending_co"], 2)
 
         # S2:
-        # - SO unique: {"TX_200"} -> count 1
-        # - CO unique: {"PAY_200"} -> count 1
-        self.assertEqual(stats["server_stats"]["S2"]["pending_so"], 1)
-        self.assertEqual(stats["server_stats"]["S2"]["pending_co"], 1)
+        # - SO unique: {"TX_200", "TX_201", "TX_202"} -> count 3
+        # - CO unique: {"PAY_200", "PAY_202"} -> count 2
+        self.assertEqual(stats["server_stats"]["S2"]["pending_so"], 3)
+        self.assertEqual(stats["server_stats"]["S2"]["pending_co"], 2)
 
         # Unknown:
         # - SO unique: {"TX_300"} -> count 1
@@ -123,10 +123,10 @@ class TestPSATelegramNotifier(unittest.TestCase):
         self.assertEqual(stats["server_stats"]["Unknown"]["pending_co"], 0)
 
         # Totals:
-        # SO: S1(1) + S2(1) + Unknown(1) = 3
-        # CO: S1(1) + S2(1) + Unknown(0) = 2
-        self.assertEqual(stats["total_pending_so"], 3)
-        self.assertEqual(stats["total_pending_co"], 2)
+        # SO: S1(3) + S2(3) + Unknown(1) = 7
+        # CO: S1(2) + S2(2) + Unknown(0) = 4
+        self.assertEqual(stats["total_pending_so"], 7)
+        self.assertEqual(stats["total_pending_co"], 4)
 
     def test_parse_psa_data_wrapped_dict(self):
         """Test parser handles list wrapped inside a dict."""
@@ -138,7 +138,7 @@ class TestPSATelegramNotifier(unittest.TestCase):
         }
         stats = notifier.parse_psa_data(wrapped_payload)
         self.assertEqual(stats["total_pending_so"], 1)
-        self.assertEqual(stats["total_pending_co"], 0)
+        self.assertEqual(stats["total_pending_co"], 1)
 
     def test_parse_psa_data_grouped_dict(self):
         """Test parser handles dictionary with separate SO and CO keys (getALLData format)."""
@@ -167,8 +167,7 @@ class TestPSATelegramNotifier(unittest.TestCase):
             ]
         }
         stats = notifier.parse_psa_data(grouped_payload)
-        # 1 pending SO (no soNumber) and 1 pending CO (with '-')
-        self.assertEqual(stats["total_pending_so"], 1)
+        self.assertEqual(stats["total_pending_so"], 2)
         self.assertEqual(stats["total_pending_co"], 1)
 
     def test_parse_corporate_psa_data(self):
@@ -190,10 +189,9 @@ class TestPSATelegramNotifier(unittest.TestCase):
             ]
         }
         stats = notifier.parse_psa_data(corp_payload)
-        # 1 pending (with '-') and 1 complete (with ZFCO123)
         self.assertEqual(stats["total_pending_so"], 0)
-        self.assertEqual(stats["total_pending_co"], 1)
-        self.assertEqual(stats["server_stats"]["14"]["pending_co"], 1)
+        self.assertEqual(stats["total_pending_co"], 2)
+        self.assertEqual(stats["server_stats"]["14"]["pending_co"], 2)
 
     def test_format_telegram_message(self):
         """Test formatting of Telegram message."""
@@ -309,17 +307,14 @@ class TestPSATelegramNotifier(unittest.TestCase):
         mock_send.assert_called_with("PSA Data still pending\n(Pending SO: 1, Pending CO: 0)", config)
         mock_send.reset_mock()
         
-        # Scenario 2: There is no pending data
+        # Scenario 2: There is no pending data (empty lists)
         no_pending_payload = {
-            "SO": [
-                {"process": "SO", "do_number": "O003120-2026-00056", "TransactionId": "622883120Z", "serverAllocation": "2", "soNumber": "SO12345"}
-            ],
+            "SO": [],
             "CO": []
         }
         mock_response.read.return_value = json.dumps(no_pending_payload).encode('utf-8')
         notifier.check_and_send_pending_alert(business_date, config)
         
-        # Verify send_telegram_notification was NOT called
         # Verify send_telegram_notification was NOT called
         mock_send.assert_not_called()
 
@@ -480,14 +475,14 @@ class TestPSATelegramNotifier(unittest.TestCase):
         biz_date = datetime.date(2026, 6, 21)
         stats = notifier.fetch_all_apis(biz_date, config)
 
-        # Expected counts:
-        # API 1 pending SO: TX_2 (count 1)
-        # API 2 pending SO: TX_3 (count 1 because filter_pending is False)
+        # Expected counts (with all items default pending):
+        # API 1 pending SO: TX_1, TX_2 (count 2)
+        # API 2 pending SO: TX_3 (count 1)
         self.assertIn("PSA", stats)
         self.assertIn("API_2", stats)
-        self.assertEqual(stats["PSA"]["total_pending_so"], 1)
+        self.assertEqual(stats["PSA"]["total_pending_so"], 2)
         self.assertEqual(stats["API_2"]["total_pending_so"], 1)
-        self.assertEqual(stats["PSA"]["server_stats"]["S1"]["pending_so"], 1)
+        self.assertEqual(stats["PSA"]["server_stats"]["S1"]["pending_so"], 2)
         self.assertEqual(stats["API_2"]["server_stats"]["S1"]["pending_so"], 1)
 
     @patch('urllib.request.urlopen')
