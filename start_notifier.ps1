@@ -69,7 +69,7 @@ function Start-Notifier {
 
 
 # ---- Single-instance lock (prevents duplicate watchdogs) ----
-$MutexName = "Global\PSATelegramNotifierWatchdog"
+$MutexName = "Global\PSATelegramNotifierWatchdog_V2"
 $Mutex = New-Object System.Threading.Mutex($false, $MutexName)
 $GotLock = $Mutex.WaitOne(0, $false)
 if (-not $GotLock) {
