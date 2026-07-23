@@ -742,7 +742,12 @@ def is_empty_value(val):
 
 def is_so_pending(item, api_name=None):
     """Checks if a Sales Order is pending (has no sales order number)."""
-    if api_name in ["API_5", "FreshLPG_Pending_Orders", "freshlpg"]:
+    name_lower = (api_name or "").lower()
+    if name_lower in ["api_2", "api_3", "api_4", "api_5", 
+                      "smartsales_pending_orders", "smartsales pending orders", "cement_so_collection",
+                      "smartsales_obd_pending", "smartsales obd pending", "cement_obd_program",
+                      "sap_contract_pending", "sap contract pending", "sap_contract",
+                      "freshlpg_pending_orders", "freshlpg pending orders", "freshlpg"]:
         return True
             
     for key in ["soNumber", "so_number"]:
@@ -752,7 +757,12 @@ def is_so_pending(item, api_name=None):
 
 def is_co_pending(item, api_name=None):
     """Checks if a Collection Order is pending (has no collection/contract number)."""
-    if api_name in ["API_5", "FreshLPG_Pending_Orders", "freshlpg"]:
+    name_lower = (api_name or "").lower()
+    if name_lower in ["api_2", "api_3", "api_4", "api_5", 
+                      "smartsales_pending_orders", "smartsales pending orders", "cement_so_collection",
+                      "smartsales_obd_pending", "smartsales obd pending", "cement_obd_program",
+                      "sap_contract_pending", "sap contract pending", "sap_contract",
+                      "freshlpg_pending_orders", "freshlpg pending orders", "freshlpg"]:
         return True
         
     for key in ["contractNumber", "coNumber", "co_number"]:
