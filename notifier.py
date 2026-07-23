@@ -627,7 +627,7 @@ def load_config():
         },
         {
             "name": "API_3",
-            "url_template": "https://smartsales.mgi.org/api/delivery-program-to-all-incoterm?product_line=0&env=1&plan_id=-&order_no=-&delivery_plan_no=-&plant_code=0&inco_term=0&server_allocation=0&start_date={business_date}&end_date={business_date}",
+            "url_template": "https://smartsales.mgi.org/api/delivery-program-to-all-incoterm?product_line=0&env=1&plan_id=-&order_no=-&delivery_plan_no=-&plant_code=1201%2C%201222%2C%201223%2C%201224%2C%201225%2C%201226%2C%201227%2C%201228%2C%201229%2C%201230%2C%201231%2C%201233%2C%201234%2C%201235%2C%201236%2C%201237%2C%201238%2C%201239%2C%201241%2C%201243%2C%201244%2C%201245%2C%201246%2C%201247%2C%201248%2C%201249%2C%201250%2C%201251%2C1253&inco_term=0&server_allocation=0&start_date={start_date}&end_date={end_date}",
             "headers": {"app-key": "AnF3XAy79fvJvgksKzE0waBh8otfNlXE6htzYxuk"},
             "filter_pending": False
         },
