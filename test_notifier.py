@@ -250,8 +250,8 @@ class TestPSATelegramNotifier(unittest.TestCase):
         self.assertIn("S2: SO: 1 | CO: 0", message)
 
         self.assertIn("SmartSales OBD Pending Summary", message)
-        self.assertIn("• OBD: 2", message)
-        self.assertIn("• 1: OBD: 2 (Plan_Id - 123456, 123457)", message)
+        self.assertIn("• OBD: 02", message)
+        self.assertIn("• 1: OBD: 2 (Plan_ID - 123456, 123457)", message)
 
         self.assertIn("SAP Contract Pending Summary", message)
         self.assertIn("• CON: 2", message)

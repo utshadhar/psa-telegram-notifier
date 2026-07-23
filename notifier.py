@@ -538,7 +538,8 @@ def trigger_callmebot_call_async(text, config):
                     time.sleep(sleep_needed)
                 
                 LAST_CALL_TIME = time.time()
-                url = f"http://api.callmebot.com/start.php?user={target}&text={encoded_text}&lang=en-US-Standard-B"
+                target_encoded = urllib.parse.quote(target)
+                url = f"https://api.callmebot.com/start.php?user={target_encoded}&text={encoded_text}&lang=en-US-Standard-B"
                 try:
                     log_message(f"Initiating CallMeBot voice call alert to {target}...")
                     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -626,13 +627,13 @@ def load_config():
         },
         {
             "name": "API_3",
-            "url_template": "https://smartsales.mgi.org/api/delivery-program-to-all-incoterm?product_line=0&env=1&plan_id=-&order_no=-&delivery_plan_no=-&plant_code=0&inco_term=0&server_allocation=0&start_date={date}&end_date={date}",
+            "url_template": "https://smartsales.mgi.org/api/delivery-program-to-all-incoterm?product_line=0&env=1&plan_id=-&order_no=-&delivery_plan_no=-&plant_code=0&inco_term=0&server_allocation=0&start_date={business_date}&end_date={business_date}",
             "headers": {"app-key": "AnF3XAy79fvJvgksKzE0waBh8otfNlXE6htzYxuk"},
             "filter_pending": False
         },
         {
             "name": "API_4",
-            "url_template": "https://psa.mgi.org/api/getCorpAllData/{business_date}/{business_date}/8?server=0",
+            "url_template": "https://psa.mgi.org/api/getCorpAllData/{start_date}/{end_date}/8?server=0",
             "filter_pending": False
         },
         {
@@ -1598,7 +1599,10 @@ def format_telegram_message(stats, business_date, config):
             lines.append(f"• {label_so}: {total_so}")
             lines.append(f"• {label_co}: {total_co}")
         elif default_process.upper() == "SO":
-            lines.append(f"• {label_so}: {total_so}")
+            if "obd" in name_lower or name_lower == "api_3":
+                lines.append(f"• {label_so}: {total_so:02d}")
+            else:
+                lines.append(f"• {label_so}: {total_so}")
         elif default_process.upper() == "CO":
             lines.append(f"• {label_co}: {total_co}")
             
@@ -1618,9 +1622,10 @@ def format_telegram_message(stats, business_date, config):
                     elif default_process.upper() == "SO":
                         if "obd" in name_lower or name_lower == "api_3":
                             so_ids = s_stats.get("so_ids", [])
-                            unique_ids_str = ", ".join(sorted(str(x) for x in set(so_ids)))
-                            plan_str = f" (Plan_Id - {unique_ids_str})" if unique_ids_str else ""
-                            lines.append(f"• {server}: {short_so}: {server_so}{plan_str}")
+                            sorted_ids = sorted(set(str(x) for x in so_ids if str(x).strip()), key=lambda x: int(x) if str(x).isdigit() else str(x))
+                            unique_ids_str = ", ".join(sorted_ids)
+                            plan_str = f" (Plan_ID - {unique_ids_str})" if unique_ids_str else ""
+                            lines.append(f"• {server}: OBD: {len(sorted_ids)}{plan_str}")
                         else:
                             lines.append(f"• {server}: {short_so}: {server_so}")
                     elif default_process.upper() == "CO":
