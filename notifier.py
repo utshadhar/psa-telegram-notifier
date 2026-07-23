@@ -10,6 +10,13 @@ import threading
 import http.server
 import socketserver
 import concurrent.futures
+import ssl
+
+# Globally bypass SSL certificate verification for intranet/local environments
+try:
+    ssl._create_default_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.json")
@@ -229,10 +236,6 @@ def load_thresholds():
                 for k, v in saved.items():
                     if k in defaults:
                         defaults[k] = v
-                # Fallback to legacy keys if default keys don't exist in config.json yet
-                for legacy_k, default_k in legacy_mappings.items():
-                    if default_k not in saved and legacy_k in saved:
-                        defaults[default_k] = saved[legacy_k]
         except Exception as e:
             print(f"Error loading thresholds from config.json: {e}")
 
@@ -991,7 +994,7 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
 
     # Define keys based on API specification
     if is_obd_api:
-        so_keys = ["Plan_Id", "plan_id", "planid"]
+        so_keys = ["Plan_Id", "plan_id", "planid", "plan_no", "planno", "planNo", "Plan_No", "PlanNo"]
         co_keys = []
     elif is_contract_api:
         so_keys = []
