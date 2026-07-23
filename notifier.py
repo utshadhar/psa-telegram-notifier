@@ -743,11 +743,8 @@ def is_empty_value(val):
 def is_so_pending(item, api_name=None):
     """Checks if a Sales Order is pending (has no sales order number)."""
     name_lower = (api_name or "").lower()
-    if name_lower in ["api_2", "api_3", "api_4", "api_5", 
-                      "smartsales_pending_orders", "smartsales pending orders", "cement_so_collection",
-                      "smartsales_obd_pending", "smartsales obd pending", "cement_obd_program",
-                      "sap_contract_pending", "sap contract pending", "sap_contract",
-                      "freshlpg_pending_orders", "freshlpg pending orders", "freshlpg"]:
+    # Any intranet/local APIs (API_2 to API_5) are treated as pending by default
+    if any(x in name_lower for x in ["api_2", "api_3", "api_4", "api_5", "smartsales", "cement", "contract", "freshlpg"]):
         return True
             
     for key in ["soNumber", "so_number"]:
@@ -758,11 +755,8 @@ def is_so_pending(item, api_name=None):
 def is_co_pending(item, api_name=None):
     """Checks if a Collection Order is pending (has no collection/contract number)."""
     name_lower = (api_name or "").lower()
-    if name_lower in ["api_2", "api_3", "api_4", "api_5", 
-                      "smartsales_pending_orders", "smartsales pending orders", "cement_so_collection",
-                      "smartsales_obd_pending", "smartsales obd pending", "cement_obd_program",
-                      "sap_contract_pending", "sap contract pending", "sap_contract",
-                      "freshlpg_pending_orders", "freshlpg pending orders", "freshlpg"]:
+    # Any intranet/local APIs (API_2 to API_5) are treated as pending by default
+    if any(x in name_lower for x in ["api_2", "api_3", "api_4", "api_5", "smartsales", "cement", "contract", "freshlpg"]):
         return True
         
     for key in ["contractNumber", "coNumber", "co_number"]:
@@ -1065,7 +1059,7 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
                         return str(val).strip()
         return "Unknown"
 
-    so_indicators = ["soNumber", "so_number", "doNumber", "do_number"]
+    so_indicators = ["soNumber", "so_number", "doNumber", "do_number", "so_no", "SO_No"]
     co_indicators = ["coNumber", "co_number", "contractNumber", "contract_number", "pay_id", "payid", "PayId"]
 
     # 1. Process Sales Orders (SO) / OBD
@@ -1075,7 +1069,9 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
                 continue
                 
             process = str(item.get("process") or "").strip().upper()
-            if default_process is not None:
+            if is_obd_api:
+                is_so = True
+            elif default_process is not None:
                 is_so = (default_process.upper() == "SO")
             else:
                 if process in ("SO", "CO", "CONTRACT", "COLLECTION"):
@@ -1106,7 +1102,9 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
                 continue
 
             process = str(item.get("process") or "").strip().upper()
-            if default_process is not None:
+            if is_contract_api:
+                is_co = True
+            elif default_process is not None:
                 is_co = (default_process.upper() == "CO")
             else:
                 if process in ("SO", "CO", "CONTRACT", "COLLECTION"):
