@@ -86,12 +86,37 @@ $GitCheckInterval = 4  # 4 x 15s = 1 minute
 
 # Loop indefinitely
 while ($true) {
-    # Check if network is available (Ping Google DNS)
+    # ---- Notifier Process Check (ALWAYS runs, even without network) ----
+    $Processes = Get-CimInstance Win32_Process -Filter "Name like '%python%'" -ErrorAction SilentlyContinue | Where-Object {
+        $_.CommandLine -like "*notifier.py*"
+    }
+    if ($null -eq $Processes -or $Processes.Count -eq 0) {
+        $Processes = Get-WmiObject Win32_Process -Filter "Name like '%python%'" -ErrorAction SilentlyContinue | Where-Object {
+            $_.CommandLine -like "*notifier.py*"
+        }
+    }
+
+    # Handle multiple processes to prevent duplicate notifications
+    if ($Processes -and @($Processes).Count -gt 1) {
+        Write-Log "Multiple notifier processes detected ($(@($Processes).Count)). Killing all and restarting one clean instance..."
+        foreach ($P in $Processes) {
+            try { Stop-Process -Id $P.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
+        }
+        $Processes = $null
+    }
+
+    if (-not $Processes -or @($Processes).Count -eq 0) {
+        Write-Log "Notifier process is NOT running. Starting notifier..."
+        Start-Notifier
+        Start-Sleep -Seconds 5  # Give notifier time to start before next check
+    }
+
+    # ---- Network Check (only for git pull) ----
     $NetworkAvailable = Test-Connection -ComputerName 8.8.8.8 -Count 1 -Quiet
 
     if (-not $NetworkAvailable) {
-        Write-Log "Network is unavailable. Waiting for connection..."
-        Start-Sleep -Seconds 10
+        Write-Log "Network is unavailable. Git check skipped."
+        Start-Sleep -Seconds 15
         continue
     }
 
@@ -149,30 +174,6 @@ while ($true) {
                 Write-Log "Git check failed: $_"
             }
         }
-    }
-
-    # ---- Notifier Process Check ----
-    $Processes = Get-CimInstance Win32_Process -Filter "Name like '%python%'" -ErrorAction SilentlyContinue | Where-Object {
-        $_.CommandLine -like "*notifier.py*"
-    }
-    if ($null -eq $Processes) {
-        $Processes = Get-WmiObject Win32_Process -Filter "Name like '%python%'" -ErrorAction SilentlyContinue | Where-Object {
-            $_.CommandLine -like "*notifier.py*"
-        }
-    }
-
-    # Handle multiple processes to prevent duplicate notifications
-    if ($Processes -and $Processes.Count -gt 1) {
-        Write-Log "Multiple notifier processes detected ($($Processes.Count)). Killing all and restarting one clean instance..."
-        foreach ($P in $Processes) {
-            try { Stop-Process -Id $P.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
-        }
-        $Processes = $null
-    }
-
-    if (-not $Processes) {
-        Write-Log "Notifier process is NOT running. Starting notifier..."
-        Start-Notifier
     }
 
     # Check status every 15 seconds
