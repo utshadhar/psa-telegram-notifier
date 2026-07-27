@@ -2174,30 +2174,34 @@ def run_long_polling_loop(stop_event):
     
     offset = 0
     while not stop_event.is_set():
-        is_render = (os.environ.get("RENDER") is not None)
-        if is_render or ACTIVE_ENV == "Render":
-            time.sleep(2)
-            continue
-            
-        config = load_config()
-        token = config.get("telegram_bot_token")
-        if not token:
-            time.sleep(5)
-            continue
-            
-        url = f"https://api.telegram.org/bot{token}/getUpdates?offset={offset}&timeout=20"
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=25) as resp:
-                res = json.loads(resp.read().decode('utf-8'))
-                if res.get("ok"):
-                    for update in res.get("result", []):
-                        offset = update.get("update_id", 0) + 1
-                        message = update.get("message") or update.get("edited_message") or update.get("callback_query")
-                        if message:
-                            process_long_poll_update(update, config)
-        except Exception as e:
-            time.sleep(2)
+            is_render = (os.environ.get("RENDER") is not None)
+            if is_render or ACTIVE_ENV == "Render":
+                time.sleep(2)
+                continue
+                
+            config = load_config()
+            token = config.get("telegram_bot_token")
+            if not token:
+                time.sleep(5)
+                continue
+                
+            url = f"https://api.telegram.org/bot{token}/getUpdates?offset={offset}&timeout=20"
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=25) as resp:
+                    res = json.loads(resp.read().decode('utf-8'))
+                    if res.get("ok"):
+                        for update in res.get("result", []):
+                            offset = update.get("update_id", 0) + 1
+                            message = update.get("message") or update.get("edited_message") or update.get("callback_query")
+                            if message:
+                                process_long_poll_update(update, config)
+            except Exception as e:
+                time.sleep(2)
+        except Exception as outer_e:
+            log_message(f"Long polling outer loop error (auto-recovering): {outer_e}")
+            time.sleep(5)
 
 def takeover_failover_loop(stop_event):
     global PREFERRED_ENV, ACTIVE_ENV, IS_STANDBY, BOTH_DEAD_ALERT_SENT, LAST_API_POLL_SUCCESS, CONFIG_ERROR
@@ -3321,8 +3325,37 @@ def main():
         register_bot_commands(config)
 
         # Start long polling thread
-        lp_thread = threading.Thread(target=run_long_polling_loop, args=(stop_event,), daemon=True)
+        lp_thread = threading.Thread(target=run_long_polling_loop, args=(stop_event,), daemon=True, name="LongPollingThread")
         lp_thread.start()
+
+        # Internal thread watchdog: monitors all background threads and restarts them if they die
+        def run_long_polling_loop_restart(stop_event):
+            """Wrapper that resets LONG_POLLING_ACTIVE so the thread can be restarted."""
+            global LONG_POLLING_ACTIVE
+            LONG_POLLING_ACTIVE = False
+            run_long_polling_loop(stop_event)
+
+        def thread_watchdog(stop_event, threads_ref):
+            while not stop_event.is_set():
+                if stop_event.wait(60):
+                    break
+                for i, (name, t, factory) in enumerate(threads_ref):
+                    if not t.is_alive():
+                        log_message(f"Thread '{name}' died unexpectedly. Restarting...")
+                        new_t = factory()
+                        new_t.start()
+                        threads_ref[i] = (name, new_t, factory)
+
+        lp_thread_ref_list = [["LongPollingThread", lp_thread, lambda: threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")]]
+        threads_to_watch = [
+            ["MonitoringThread",   mon_thread,     lambda: threading.Thread(target=monitoring_scheduler_loop,   args=(stop_event,), daemon=True, name="MonitoringThread")],
+            ["PendingAlertThread", pending_thread, lambda: threading.Thread(target=pending_alert_scheduler_loop, args=(stop_event,), daemon=True, name="PendingAlertThread")],
+            ["AgingAlertThread",   aging_thread,   lambda: threading.Thread(target=aging_alerts_scheduler_loop,  args=(stop_event,), daemon=True, name="AgingAlertThread")],
+        ] + lp_thread_ref_list
+
+        wd = threading.Thread(target=thread_watchdog, args=(stop_event, threads_to_watch), daemon=True, name="InternalThreadWatchdog")
+        wd.start()
+        log_message("Internal thread watchdog started (monitors threads every 60s).")
 
         server = ThreadingHTTPServer(('', port), RequestHandler)
         print(f"[{datetime.datetime.now()}] Local API server starting on port {port}...")
