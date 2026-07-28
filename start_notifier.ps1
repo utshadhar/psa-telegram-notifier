@@ -112,7 +112,19 @@ while ($true) {
     }
 
     # ---- Network Check (only for git pull) ----
-    $NetworkAvailable = Test-Connection -ComputerName 8.8.8.8 -Count 1 -Quiet
+    $NetworkAvailable = $false
+    try {
+        $Req = [System.Net.WebRequest]::Create("https://api.telegram.org")
+        $Req.Timeout = 5000
+        $Res = $Req.GetResponse()
+        $Res.Close()
+        $NetworkAvailable = $true
+    } catch {
+        $NetworkAvailable = Test-Connection -ComputerName github.com -Count 1 -Quiet
+        if (-not $NetworkAvailable) {
+            $NetworkAvailable = Test-Connection -ComputerName 8.8.8.8 -Count 1 -Quiet
+        }
+    }
 
     if (-not $NetworkAvailable) {
         Write-Log "Network is unavailable. Git check skipped."

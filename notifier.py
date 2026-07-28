@@ -156,12 +156,14 @@ def is_hour_in_range(hour, start, end):
         return hour >= start or hour < end
 
 def is_in_10min_psa_window(dt):
-    """Checks if local time is within the 11:01 PM to 12:59 AM window (23:01 to 00:59)."""
+    """Checks if local time is within the 11:01 PM to 1:00 AM window (23:01 to 01:00)."""
     hour = dt.hour
     minute = dt.minute
     if hour == 23 and minute >= 1:
         return True
-    if hour == 0 and minute <= 59:
+    if hour == 0:
+        return True
+    if hour == 1 and minute == 0:
         return True
     return False
 
@@ -1386,17 +1388,11 @@ def answer_callback_query(callback_query_id, config):
     except Exception:
         pass
 
-def is_time_for_pending_alert(dt, end_hour):
+def is_time_for_pending_alert(dt, end_hour=1):
     """
-    Checks if local time is between 11:01 PM (23:01) and 12:59 AM next day (00:59).
+    Checks if local time is between 11:01 PM (23:01) and 1:00 AM next day (01:00).
     """
-    current_time = dt.time()
-    start_time = datetime.time(23, 1, 0)
-    end_time = datetime.time(0, 59, 0)
-    
-    if current_time >= start_time or current_time <= end_time:
-        return True
-    return False
+    return is_in_10min_psa_window(dt)
 
 def check_and_send_pending_alert(business_date, config, force=False):
     """Checks if there is any pending data on the special check URL, and if so sends a Telegram alert."""
@@ -1760,15 +1756,6 @@ def run_scheduled_check(business_date=None, force=False):
             return False
 
     local_now = get_local_time(config)
-    # 11:01 PM to 12:59 AM check: only run check_and_send_pending_alert
-    if is_in_10min_psa_window(local_now) and not force:
-        print(f"[{datetime.datetime.now()}] Inside 11:01 PM-12:59 AM window. Running ONLY PSA pending filter check.")
-        try:
-            check_and_send_pending_alert(business_date, config, force=True)
-            return True
-        except Exception as e:
-            print(f"[{datetime.datetime.now()}] Error during PSA pending filter check: {e}")
-            return False
 
     try:
         stats = fetch_all_apis(business_date, config)
@@ -1818,10 +1805,8 @@ def aging_alerts_scheduler_loop(stop_event):
             config.get("monitoring_end_hour", 1)
         )
         
-        is_f7_active = is_hour_in_range(local_now.hour, OBD_OFFHOURS_START_HOUR, OBD_OFFHOURS_END_HOUR) and (SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES > 0)
-        
-        # Skip if outside active hours and off-hours OBD is inactive, or if current instance is standby
-        if (not active and not is_f7_active) or not is_current_instance_active():
+        # Threshold checkers (aging alerts for SO/CO/OBD/Contract/FreshLPG and OBD off-hours call) run 24/7
+        if not is_current_instance_active():
             continue
             
         try:
@@ -1908,6 +1893,7 @@ class MockHandler:
         import io
         body = json.dumps(update_dict).encode('utf-8')
         self.rfile = io.BytesIO(body)
+        self.wfile = io.BytesIO()
         self.headers = {"Content-Length": str(len(body))}
         self.path = "/webhook"
     def send_json_response(self, status_code, body):
@@ -1918,6 +1904,8 @@ class MockHandler:
         pass
     def end_headers(self, *args, **kwargs):
         pass
+    def address_string(self):
+        return "127.0.0.1"
 
 def process_long_poll_update(update, config):
     try:
