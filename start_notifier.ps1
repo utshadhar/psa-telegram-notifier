@@ -33,7 +33,7 @@ function Send-TelegramMessage($Text) {
             
             if ($TelegramToken -and $TelegramChatId -and -not ($TelegramToken -like "*YOUR_*") -and -not ($TelegramChatId -like "*YOUR_*")) {
                 $Url = "https://api.telegram.org/bot$TelegramToken/sendMessage"
-                $Body = @{ chat_id = $TelegramChatId; text = $Text; parse_mode = "Markdown" }
+                $Body = @{ chat_id = $TelegramChatId; text = $Text }
                 Invoke-RestMethod -Uri $Url -Method Post -Body $Body -ErrorAction SilentlyContinue | Out-Null
             }
         }
