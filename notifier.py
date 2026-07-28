@@ -3345,7 +3345,20 @@ def main():
         wd.start()
         log_message("Internal thread watchdog started (monitors threads every 60s).")
 
-        server = ThreadingHTTPServer(('', port), RequestHandler)
+        bound = False
+        for try_port in [port, 8085, 8086, 8087, 8088]:
+            try:
+                server = ThreadingHTTPServer(('', try_port), RequestHandler)
+                bound = True
+                port = try_port
+                break
+            except OSError as e:
+                log_message(f"Port {try_port} binding failed ({e}). Trying fallback port...")
+        
+        if not bound:
+            log_message("CRITICAL: Failed to bind HTTP server to any port.")
+            return
+
         print(f"[{datetime.datetime.now()}] Local API server starting on port {port}...")
         try:
             server.serve_forever()
