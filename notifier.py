@@ -3336,9 +3336,9 @@ def main():
 
         lp_thread_ref_list = [["LongPollingThread", lp_thread, lambda: threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")]]
         threads_to_watch = [
-            ["MonitoringThread",   mon_thread,     lambda: threading.Thread(target=monitoring_scheduler_loop,   args=(stop_event,), daemon=True, name="MonitoringThread")],
-            ["PendingAlertThread", pending_thread, lambda: threading.Thread(target=pending_alert_scheduler_loop, args=(stop_event,), daemon=True, name="PendingAlertThread")],
-            ["AgingAlertThread",   aging_thread,   lambda: threading.Thread(target=aging_alerts_scheduler_loop,  args=(stop_event,), daemon=True, name="AgingAlertThread")],
+            ["MonitoringThread",   sched_thread,   lambda: threading.Thread(target=scheduler_loop,               args=(stop_event,), daemon=True, name="MonitoringThread")],
+            ["PendingAlertThread", sched_thread_2, lambda: threading.Thread(target=pending_alert_scheduler_loop, args=(stop_event,), daemon=True, name="PendingAlertThread")],
+            ["AgingAlertThread",   sched_thread_3, lambda: threading.Thread(target=aging_alerts_scheduler_loop,  args=(stop_event,), daemon=True, name="AgingAlertThread")],
         ] + lp_thread_ref_list
 
         wd = threading.Thread(target=thread_watchdog, args=(stop_event, threads_to_watch), daemon=True, name="InternalThreadWatchdog")
