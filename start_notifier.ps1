@@ -114,12 +114,21 @@ while ($true) {
     # ---- Network Check (only for git pull) ----
     $NetworkAvailable = $false
     try {
-        $Req = [System.Net.WebRequest]::Create("https://api.telegram.org")
-        $Req.Timeout = 5000
-        $Res = $Req.GetResponse()
-        $Res.Close()
-        $NetworkAvailable = $true
-    } catch {
+        $ConfigPath = Join-Path $ScriptDir "config.json"
+        if (Test-Path $ConfigPath) {
+            $Config = Get-Content -Raw -Path $ConfigPath | ConvertFrom-Json
+            $TelegramToken = $Config.telegram_bot_token
+            if ($TelegramToken -and -not ($TelegramToken -like "*YOUR_*")) {
+                $Url = "https://api.telegram.org/bot$TelegramToken/getMe"
+                $Res = Invoke-RestMethod -Uri $Url -TimeoutSec 5 -ErrorAction Stop
+                if ($Res.ok) {
+                    $NetworkAvailable = $true
+                }
+            }
+        }
+    } catch {}
+
+    if (-not $NetworkAvailable) {
         $NetworkAvailable = Test-Connection -ComputerName github.com -Count 1 -Quiet
         if (-not $NetworkAvailable) {
             $NetworkAvailable = Test-Connection -ComputerName 8.8.8.8 -Count 1 -Quiet
