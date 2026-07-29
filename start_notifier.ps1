@@ -88,12 +88,15 @@ $GitCheckInterval = 4  # 4 x 15s = 1 minute
 while ($true) {
     # ---- Notifier Process & HTTP Health Check ----
     $IsHealthy = $false
-    try {
-        $HealthReq = (Invoke-WebRequest -Uri "http://localhost:8085/" -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop).Content | ConvertFrom-Json
-        if ($HealthReq.status -eq "online") {
-            $IsHealthy = $true
-        }
-    } catch {}
+    foreach ($P in @(8085, 8080, 8086)) {
+        try {
+            $HealthReq = (Invoke-WebRequest -Uri "http://localhost:$P/" -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop).Content | ConvertFrom-Json
+            if ($HealthReq.status -eq "online") {
+                $IsHealthy = $true
+                break
+            }
+        } catch {}
+    }
 
     if (-not $IsHealthy) {
         $Processes = Get-CimInstance Win32_Process -Filter "Name like '%python%'" -ErrorAction SilentlyContinue | Where-Object {
