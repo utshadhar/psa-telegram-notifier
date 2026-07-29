@@ -1956,8 +1956,38 @@ class MockHandler:
     def address_string(self):
         return "127.0.0.1"
 
+PROCESSED_UPDATE_IDS = set()
+PROCESSED_UPDATE_LOCK = threading.Lock()
+LAST_PROCESSED_ACTION = {"key": None, "time": 0}
+
 def process_long_poll_update(update, config):
+    global LAST_PROCESSED_ACTION
     try:
+        update_id = update.get("update_id")
+        if update_id:
+            with PROCESSED_UPDATE_LOCK:
+                if update_id in PROCESSED_UPDATE_IDS:
+                    return
+                PROCESSED_UPDATE_IDS.add(update_id)
+                if len(PROCESSED_UPDATE_IDS) > 2000:
+                    PROCESSED_UPDATE_IDS.clear()
+
+        # De-duplicate identical fast consecutive taps within 1.5 seconds
+        message = update.get("message") or update.get("edited_message") or update.get("callback_query")
+        if message:
+            chat = message.get("chat") or (message.get("message", {}).get("chat") if isinstance(message, dict) else None)
+            chat_id = str(chat.get("id")) if isinstance(chat, dict) else ""
+            text = str(message.get("text") or message.get("data") or "").strip().lower()
+            if chat_id and text:
+                now_ts = time.time()
+                action_key = f"{chat_id}:{text}"
+                with PROCESSED_UPDATE_LOCK:
+                    if LAST_PROCESSED_ACTION["key"] == action_key and (now_ts - LAST_PROCESSED_ACTION["time"]) < 1.5:
+                        log_message(f"De-duplicating rapid duplicate input '{text}' from chat {chat_id}")
+                        return
+                    LAST_PROCESSED_ACTION["key"] = action_key
+                    LAST_PROCESSED_ACTION["time"] = now_ts
+
         mock_handler = MockHandler(update)
         RequestHandler.do_POST(mock_handler)
     except Exception as e:
