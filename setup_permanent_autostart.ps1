@@ -28,8 +28,9 @@ try {
     Write-Host "Windows Startup folder VBScript will handle autostart."
 }
 
-# 3. Launch watchdog immediately in background
-Write-Host "Launching watchdog process right now..."
-Start-Process "wscript.exe" -ArgumentList "`"$VbsPath`""
+# 3. Launch watchdog detached via WMI so it is immune to parent process job cleanup
+Write-Host "Launching detached watchdog process right now..."
+$Cmd = "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$WatchdogScript`""
+wmic process call create "$Cmd" | Out-Null
 Start-Sleep -Seconds 3
 Write-Host "Permanent Autostart Setup Complete!"
