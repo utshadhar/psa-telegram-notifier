@@ -99,6 +99,36 @@ LONG_POLLING_ACTIVE = False
 
 STATE_FILE = os.path.join(SCRIPT_DIR, "conv_state.json")
 
+PROCESSED_UPDATE_IDS = set()
+PROCESSED_LOCK = threading.Lock()
+
+def is_duplicate_update(update):
+    global PROCESSED_UPDATE_IDS
+    if not isinstance(update, dict):
+        return False
+    update_id = update.get("update_id")
+    callback_query = update.get("callback_query")
+    message = update.get("message") or update.get("edited_message")
+    
+    unique_key = None
+    if update_id is not None:
+        unique_key = f"up_{update_id}"
+    elif callback_query and isinstance(callback_query, dict) and callback_query.get("id"):
+        unique_key = f"cb_{callback_query.get('id')}"
+    elif message and isinstance(message, dict) and message.get("message_id") and message.get("chat"):
+        unique_key = f"msg_{message.get('chat').get('id')}_{message.get('message_id')}"
+        
+    if not unique_key:
+        return False
+
+    with PROCESSED_LOCK:
+        if unique_key in PROCESSED_UPDATE_IDS:
+            return True
+        PROCESSED_UPDATE_IDS.add(unique_key)
+        if len(PROCESSED_UPDATE_IDS) > 2000:
+            PROCESSED_UPDATE_IDS = set(list(PROCESSED_UPDATE_IDS)[-1000:])
+        return False
+
 def save_conv_state():
     try:
         data = {
@@ -2690,6 +2720,11 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                         if not is_current_instance_active():
                             print(f"[{datetime.datetime.now()}] Standby instance received update '{text}'. Ignoring to prevent duplicate responses.")
                             self.send_json_response(200, {"status": "ok", "message": "Standby instance ignored update."})
+                            return
+
+                        if is_duplicate_update(update):
+                            print(f"[{datetime.datetime.now()}] Duplicate update received '{text}'. Ignoring to prevent double notifications.")
+                            self.send_json_response(200, {"status": "ok", "message": "Duplicate update ignored."})
                             return
 
                         import re
