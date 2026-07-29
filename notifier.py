@@ -2687,6 +2687,11 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                     expected_chat_id = str(config.get("telegram_chat_id", "")).strip()
                     
                     if chat_id == expected_chat_id:
+                        if not is_current_instance_active():
+                            print(f"[{datetime.datetime.now()}] Standby instance received update '{text}'. Ignoring to prevent duplicate responses.")
+                            self.send_json_response(200, {"status": "ok", "message": "Standby instance ignored update."})
+                            return
+
                         import re
                         
                         # Conversational state handling
