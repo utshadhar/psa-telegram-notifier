@@ -90,11 +90,36 @@ LAST_WEBHOOK_ERROR = None
 
 # Conversational / interactive variables for aging alert checks
 USER_CONVERSATION_STATE = None
+ENTERED_CURRENT_VALS = {}
 PENDING_CONFIG_UPDATE = None
 IS_STANDBY = False
 LAST_LOCAL_HEARTBEAT = 0.0
 LOCAL_ONLINE_STATE = True
 LONG_POLLING_ACTIVE = False
+
+STATE_FILE = os.path.join(SCRIPT_DIR, "conv_state.json")
+
+def save_conv_state():
+    try:
+        data = {
+            "USER_CONVERSATION_STATE": USER_CONVERSATION_STATE,
+            "ENTERED_CURRENT_VALS": ENTERED_CURRENT_VALS
+        }
+        with open(STATE_FILE, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+def load_conv_state():
+    global USER_CONVERSATION_STATE, ENTERED_CURRENT_VALS
+    try:
+        if os.path.exists(STATE_FILE):
+            with open(STATE_FILE, "r") as f:
+                data = json.load(f)
+                USER_CONVERSATION_STATE = data.get("USER_CONVERSATION_STATE")
+                ENTERED_CURRENT_VALS = data.get("ENTERED_CURRENT_VALS", {})
+    except Exception:
+        pass
 
 # State switching and failover variables
 PREFERRED_ENV = "Local"
@@ -2105,29 +2130,7 @@ def get_confirm_inline_keyboard():
         ]
     }
 
-STATE_FILE = os.path.join(SCRIPT_DIR, "conv_state.json")
 
-def save_conv_state():
-    try:
-        data = {
-            "USER_CONVERSATION_STATE": USER_CONVERSATION_STATE,
-            "ENTERED_CURRENT_VALS": ENTERED_CURRENT_VALS
-        }
-        with open(STATE_FILE, "w") as f:
-            json.dump(data, f)
-    except Exception:
-        pass
-
-def load_conv_state():
-    global USER_CONVERSATION_STATE, ENTERED_CURRENT_VALS
-    try:
-        if os.path.exists(STATE_FILE):
-            with open(STATE_FILE, "r") as f:
-                data = json.load(f)
-                USER_CONVERSATION_STATE = data.get("USER_CONVERSATION_STATE")
-                ENTERED_CURRENT_VALS = data.get("ENTERED_CURRENT_VALS", {})
-    except Exception:
-        pass
 
 def telegram_api_call(method, payload, config):
     token = config.get("telegram_bot_token")
@@ -2700,12 +2703,14 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                 if meta:
                                     if text in ["default", "1"]:
                                         USER_CONVERSATION_STATE = f"AWAITING_DEFAULT_VAL_{feat_key.upper()}"
+                                        save_conv_state()
                                         prompt = meta["default_prompt"]
                                         send_telegram_notification(prompt, config)
                                         self.send_json_response(200, {"status": "ok", "message": prompt})
                                         return
                                     elif text in ["current", "2"]:
                                         USER_CONVERSATION_STATE = f"AWAITING_CURRENT_VAL_{feat_key.upper()}"
+                                        save_conv_state()
                                         prompt = meta["current_prompt"]
                                         send_telegram_notification(prompt, config)
                                         self.send_json_response(200, {"status": "ok", "message": prompt})
@@ -2726,6 +2731,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         send_telegram_notification(msg, config)
                                         USER_CONVERSATION_STATE = None
                                         ENTERED_CURRENT_VALS.pop(feat_key, None)
+                                        save_conv_state()
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
                                     else:
@@ -2768,6 +2774,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         val_str = f"{val} min"
 
                                     USER_CONVERSATION_STATE = f"AWAITING_DEFAULT_ON_CONFIRM_{feat_key.upper()}"
+                                    save_conv_state()
                                     msg = f"{meta['default_prompt']} = {val_str}\n\nWant to turn ON {meta['label']}?"
                                     send_telegram_notification(msg, config, reply_markup=get_confirm_inline_keyboard())
                                     self.send_json_response(200, {"status": "ok", "message": msg})
@@ -2805,6 +2812,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
 
                                     ENTERED_CURRENT_VALS[feat_key] = val
                                     USER_CONVERSATION_STATE = f"AWAITING_CURRENT_ON_CONFIRM_{feat_key.upper()}"
+                                    save_conv_state()
                                     msg = f"{meta['label']} = {val_str}\n\nWant to turn ON {meta['label']}?"
                                     send_telegram_notification(msg, config, reply_markup=get_confirm_inline_keyboard())
                                     self.send_json_response(200, {"status": "ok", "message": msg})
@@ -2819,6 +2827,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                 if meta:
                                     if text in ["yes", "y"]:
                                         USER_CONVERSATION_STATE = f"AWAITING_ENABLE_MODE_{feat_key.upper()}"
+                                        save_conv_state()
                                         msg = "By which you want to change?"
                                         send_telegram_notification(msg, config, reply_markup=get_options_inline_keyboard())
                                         self.send_json_response(200, {"status": "ok", "message": msg})
@@ -2827,6 +2836,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         save_thresholds()
                                         update_render_env_vars_async()
                                         USER_CONVERSATION_STATE = None
+                                        save_conv_state()
                                         if is_from_default:
                                             msg = f"{meta['label']} default updated. Checker remains unchanged."
                                         else:
@@ -2854,6 +2864,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         save_thresholds()
                                         update_render_env_vars_async()
                                         USER_CONVERSATION_STATE = None
+                                        save_conv_state()
 
                                         if meta.get("is_hour"):
                                             val_str = f"{val}h"
@@ -2874,6 +2885,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         save_thresholds()
                                         update_render_env_vars_async()
                                         USER_CONVERSATION_STATE = None
+                                        save_conv_state()
 
                                         if meta.get("is_hour"):
                                             val_str = f"{val}h"
@@ -2902,6 +2914,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         update_render_env_vars_async()
                                         USER_CONVERSATION_STATE = None
                                         ENTERED_CURRENT_VALS.pop(feat_key, None)
+                                        save_conv_state()
                                         send_telegram_notification(msg, config)
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
