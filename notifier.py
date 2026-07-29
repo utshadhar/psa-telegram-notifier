@@ -250,21 +250,13 @@ def load_thresholds():
                 env_val = os.environ.get(legacy_key)
 
         if env_val is not None:
-            if isinstance(defaults[key], bool):
-                defaults[key] = (str(env_val).strip().lower() in ("true", "1", "yes"))
-            elif isinstance(defaults[key], int):
+            if key in ["CALLMEBOT_USER", "CALLMEBOT_USER_DEFAULT", "PREFERRED_ENV"]:
+                defaults[key] = str(env_val).strip()
+            else:
                 try:
                     defaults[key] = int(env_val)
                 except ValueError:
                     pass
-            elif defaults[key] is None:
-                # Determine type from default counterpart or handle as string
-                try:
-                    defaults[key] = int(env_val)
-                except ValueError:
-                    defaults[key] = str(env_val)
-            else:
-                defaults[key] = str(env_val)
 
     # Assign default globals
     PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT = defaults["PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT"]
@@ -297,6 +289,8 @@ def load_thresholds():
     OBD_OFFHOURS_START_HOUR = defaults["OBD_OFFHOURS_START_HOUR"] if defaults["OBD_OFFHOURS_START_HOUR"] is not None else OBD_OFFHOURS_START_HOUR_DEFAULT
     OBD_OFFHOURS_END_HOUR = defaults["OBD_OFFHOURS_END_HOUR"] if defaults["OBD_OFFHOURS_END_HOUR"] is not None else OBD_OFFHOURS_END_HOUR_DEFAULT
     CALLMEBOT_USER = defaults["CALLMEBOT_USER"] if defaults["CALLMEBOT_USER"] is not None else CALLMEBOT_USER_DEFAULT
+
+    load_conv_state()
 
     # Determine ACTIVE_ENV at startup
     is_render = (os.environ.get("RENDER") is not None or os.environ.get("RENDER_SERVICE_ID") is not None)
@@ -2111,6 +2105,30 @@ def get_confirm_inline_keyboard():
         ]
     }
 
+STATE_FILE = os.path.join(SCRIPT_DIR, "conv_state.json")
+
+def save_conv_state():
+    try:
+        data = {
+            "USER_CONVERSATION_STATE": USER_CONVERSATION_STATE,
+            "ENTERED_CURRENT_VALS": ENTERED_CURRENT_VALS
+        }
+        with open(STATE_FILE, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+def load_conv_state():
+    global USER_CONVERSATION_STATE, ENTERED_CURRENT_VALS
+    try:
+        if os.path.exists(STATE_FILE):
+            with open(STATE_FILE, "r") as f:
+                data = json.load(f)
+                USER_CONVERSATION_STATE = data.get("USER_CONVERSATION_STATE")
+                ENTERED_CURRENT_VALS = data.get("ENTERED_CURRENT_VALS", {})
+    except Exception:
+        pass
+
 def telegram_api_call(method, payload, config):
     token = config.get("telegram_bot_token")
     if not token:
@@ -2136,6 +2154,7 @@ def telegram_api_call(method, payload, config):
 def start_feature_conversation(handler, feat_key, config):
     global USER_CONVERSATION_STATE
     USER_CONVERSATION_STATE = f"SELECT_MODE_{feat_key.upper()}"
+    save_conv_state()
     meta = CONV_FEATURE_MAP[feat_key]
     msg = f"Update options for {meta['label']}:"
     reply_markup = {
@@ -2671,6 +2690,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                         if USER_CONVERSATION_STATE and text.startswith("/"):
                             log_message(f"User sent command '{text}' while in state '{USER_CONVERSATION_STATE}'. Cancelling previous state.")
                             USER_CONVERSATION_STATE = None
+                            save_conv_state()
 
                         if USER_CONVERSATION_STATE:
                             # 1. SELECT_MODE_FEAT
