@@ -86,29 +86,31 @@ $GitCheckInterval = 4  # 4 x 15s = 1 minute
 
 # Loop indefinitely
 while ($true) {
-    # ---- Notifier Process Check (ALWAYS runs, even without network) ----
-    $Processes = Get-CimInstance Win32_Process -Filter "Name like '%python%'" -ErrorAction SilentlyContinue | Where-Object {
-        $_.CommandLine -like "*notifier.py*"
-    }
-    if ($null -eq $Processes -or $Processes.Count -eq 0) {
-        $Processes = Get-WmiObject Win32_Process -Filter "Name like '%python%'" -ErrorAction SilentlyContinue | Where-Object {
+    # ---- Notifier Process & HTTP Health Check ----
+    $IsHealthy = $false
+    try {
+        $HealthReq = (Invoke-WebRequest -Uri "http://localhost:8085/" -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop).Content | ConvertFrom-Json
+        if ($HealthReq.status -eq "online") {
+            $IsHealthy = $true
+        }
+    } catch {}
+
+    if (-not $IsHealthy) {
+        $Processes = Get-CimInstance Win32_Process -Filter "Name like '%python%'" -ErrorAction SilentlyContinue | Where-Object {
             $_.CommandLine -like "*notifier.py*"
         }
-    }
-
-    # Handle multiple processes to prevent duplicate notifications
-    if ($Processes -and @($Processes).Count -gt 1) {
-        Write-Log "Multiple notifier processes detected ($(@($Processes).Count)). Killing all and restarting one clean instance..."
-        foreach ($P in $Processes) {
-            try { Stop-Process -Id $P.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
+        if ($Processes -and @($Processes).Count -gt 1) {
+            Write-Log "Multiple notifier processes detected ($(@($Processes).Count)). Killing all and restarting one clean instance..."
+            Stop-Notifier
+            $Processes = $null
         }
-        $Processes = $null
-    }
 
-    if (-not $Processes -or @($Processes).Count -eq 0) {
-        Write-Log "Notifier process is NOT running. Starting notifier..."
-        Start-Notifier
-        Start-Sleep -Seconds 5  # Give notifier time to start before next check
+        if (-not $Processes -or @($Processes).Count -eq 0) {
+            Write-Log "Notifier process is NOT running or unresponsive. Starting notifier..."
+            Stop-Notifier
+            Start-Notifier
+            Start-Sleep -Seconds 6  # Give notifier time to bind port before next loop
+        }
     }
 
     # ---- Network Check (only for git pull) ----
