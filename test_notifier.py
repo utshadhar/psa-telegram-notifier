@@ -1098,7 +1098,8 @@ class TestPSATelegramNotifier(unittest.TestCase):
     def test_freshlpg_thresholds(self):
         """Test FreshLPG thresholds, status, and config loading logic."""
         # 1. Defaults check
-        notifier.load_thresholds()
+        with patch("notifier.CONFIG_PATH", "/non_existent_config.json"):
+            notifier.load_thresholds()
         self.assertEqual(notifier.FRESHLPG_SO_PENDING_THRESHOLD_MINUTES, 15)
         self.assertEqual(notifier.FRESHLPG_CO_PENDING_THRESHOLD_MINUTES, 10)
 

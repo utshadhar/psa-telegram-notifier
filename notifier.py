@@ -10,7 +10,11 @@ import threading
 import http.server
 import socketserver
 import concurrent.futures
+import socket
 import ssl
+
+# Globally set default socket timeout to 20s to prevent indefinite thread hangs on network calls
+socket.setdefaulttimeout(20.0)
 
 # Globally bypass SSL certificate verification for intranet/local environments
 try:
@@ -217,8 +221,6 @@ def is_in_10min_psa_window(dt):
     if hour == 23 and minute >= 1:
         return True
     if hour == 0:
-        return True
-    if hour == 1 and minute == 0:
         return True
     return False
 
@@ -1362,13 +1364,19 @@ def fetch_all_apis(business_date, config):
                 "_rpa_config"
             ))
             
-        for future in concurrent.futures.as_completed(futures):
-            name, stats, err = future.result()
-            if err:
-                print(f"[{datetime.datetime.now()}] Error fetching from {name}: {err}")
-            else:
-                results[name] = stats
-                
+        try:
+            for future in concurrent.futures.as_completed(futures, timeout=30):
+                try:
+                    name, stats, err = future.result(timeout=5)
+                    if err:
+                        print(f"[{datetime.datetime.now()}] Error fetching from {name}: {err}")
+                    else:
+                        results[name] = stats
+                except Exception as fe:
+                    print(f"[{datetime.datetime.now()}] Future execution error: {fe}")
+        except concurrent.futures.TimeoutError:
+            print(f"[{datetime.datetime.now()}] Warning: Parallel API fetching timed out after 30 seconds.")
+
     return results
 
 def send_telegram_notification(message, config, reply_markup=None):
