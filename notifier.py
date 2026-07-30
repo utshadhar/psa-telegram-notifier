@@ -1470,6 +1470,9 @@ def check_and_send_pending_alert(business_date, config, force=False):
     # Replace date placeholder
     date_str = business_date.strftime("%Y-%m-%d")
     url = template.replace("{business_date}", date_str).replace("{date}", date_str)
+    if "{start_date}" in url or "{end_date}" in url:
+        start_date_str = (business_date - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        url = url.replace("{start_date}", start_date_str).replace("{end_date}", date_str)
     
     print(f"[{datetime.datetime.now()}] Running extra pending check from: {url}")
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -1520,18 +1523,15 @@ def pending_alert_scheduler_loop(stop_event):
             
         local_check = get_local_time(config)
         end_hour = config.get("monitoring_end_hour", 1)
-        poll_interval = config.get("poll_interval_minutes", 30)
         
-        # Only run if we are inside the late-night window and current instance is active
+        # Only run if we are inside the late-night window (23:01 to 01:00) and current instance is active
         if is_time_for_pending_alert(local_check, end_hour) and is_current_instance_active():
-            # Skip checking if it aligns with the main poll interval to avoid duplicates
-            if local_check.minute % poll_interval != 0:
-                business_date, _ = get_business_date_and_active(
-                    local_check,
-                    config.get("monitoring_start_hour", 9),
-                    end_hour
-                )
-                check_and_send_pending_alert(business_date, config, force=True)
+            business_date, _ = get_business_date_and_active(
+                local_check,
+                config.get("monitoring_start_hour", 9),
+                end_hour
+            )
+            check_and_send_pending_alert(business_date, config, force=True)
 
 def format_telegram_message(stats, business_date, config):
     """Formats the parsed counts, server breakdown, and local report times into a Markdown message."""
@@ -1876,47 +1876,17 @@ def scheduler_loop(stop_event):
         config = load_config()
         local_now = get_local_time(config)
 
-        # Standard interval
+        # Standard interval (e.g. 30 min)
         std_interval = config.get("poll_interval_minutes", 30)
         
         # Calculate standard next report time
         std_minutes_to_next = std_interval - (local_now.minute % std_interval)
         std_next = local_now + datetime.timedelta(minutes=std_minutes_to_next)
-        std_next = std_next.replace(second=0, microsecond=0)
-        
-        candidates = [std_next]
-        
-        # Add 10-min alignment candidates for 11:01 PM to 12:59 AM window (23:01 to 00:59)
-        w_start = local_now.replace(hour=23, minute=1, second=0, microsecond=0)
-        if w_start > local_now:
-            candidates.append(w_start)
-            
-        for m in [10, 20, 30, 40, 50]:
-            t = local_now.replace(hour=23, minute=m, second=0, microsecond=0)
-            if t > local_now:
-                candidates.append(t)
-                
-        base_day = local_now if local_now.hour == 0 else (local_now + datetime.timedelta(days=1))
-        t_00_00 = base_day.replace(hour=0, minute=0, second=0, microsecond=0)
-        if t_00_00 > local_now:
-            candidates.append(t_00_00)
-            
-        for m in [10, 20, 30, 40, 50]:
-            t = base_day.replace(hour=0, minute=m, second=0, microsecond=0)
-            if t > local_now:
-                candidates.append(t)
-                
-        w_end = base_day.replace(hour=0, minute=59, second=0, microsecond=0)
-        if w_end > local_now:
-            candidates.append(w_end)
-            
-        # Find earliest candidate strictly in the future
-        future_candidates = [c for c in candidates if c > local_now]
-        next_report = min(future_candidates)
+        next_report = std_next.replace(second=0, microsecond=0)
         
         seconds_to_next = (next_report - local_now).total_seconds()
         if seconds_to_next <= 0:
-            seconds_to_next = 60.0
+            seconds_to_next = std_interval * 60.0
 
         print(f"[{datetime.datetime.now()}] Next poll aligned check in {seconds_to_next:.1f} seconds (at {next_report.strftime('%Y-%m-%d %H:%M:%S')}).")
         if stop_event.wait(seconds_to_next):
