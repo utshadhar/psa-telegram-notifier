@@ -3329,6 +3329,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     """Multi-threaded HTTP Server using socketserver.ThreadingMixIn."""
     daemon_threads = True
+    allow_reuse_address = True
 
 def main():
     """Entry point — boots Render (webhook) or Local (long polling) mode automatically."""

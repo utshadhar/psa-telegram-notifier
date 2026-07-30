@@ -88,9 +88,9 @@ $GitCheckInterval = 4  # 4 x 15s = 1 minute
 while ($true) {
     # ---- Notifier Process & HTTP Health Check ----
     $IsHealthy = $false
-    foreach ($P in @(8085, 8080, 8086)) {
+    foreach ($P in @(8085, 8080, 8086, 8087, 8088)) {
         try {
-            $HealthReq = (Invoke-WebRequest -Uri "http://localhost:$P/" -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop).Content | ConvertFrom-Json
+            $HealthReq = (Invoke-WebRequest -Uri "http://localhost:$P/" -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop).Content | ConvertFrom-Json
             if ($HealthReq.status -eq "online") {
                 $IsHealthy = $true
                 break
@@ -112,7 +112,7 @@ while ($true) {
             Write-Log "Notifier process is NOT running or unresponsive. Starting notifier..."
             Stop-Notifier
             Start-Notifier
-            Start-Sleep -Seconds 6  # Give notifier time to bind port before next loop
+            Start-Sleep -Seconds 8  # Give notifier time to bind port before next loop
         }
     }
 
