@@ -1732,6 +1732,7 @@ def register_bot_commands(config):
         
     url = f"https://api.telegram.org/bot{token}/setMyCommands"
     commands_list = [
+        {"command": "trigger", "description": "Force start/reboot bot & run immediate summary check"},
         {"command": "feature", "description": "List all features & current threshold status"},
         {"command": "status", "description": "Get immediate report of all active APIs"},
         {"command": "report", "description": "Get immediate report of all active APIs"},
@@ -2641,6 +2642,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         global IS_STANDBY, LAST_LOCAL_HEARTBEAT, LOCAL_ONLINE_STATE, ACTIVE_ENV, PREFERRED_ENV
+        global LONG_POLLING_ACTIVE, LAST_WEBHOOK_PAYLOAD, LAST_WEBHOOK_ERROR
+        global USER_CONVERSATION_STATE, PSA_SO_PENDING_THRESHOLD_MINUTES, PSA_CO_PENDING_THRESHOLD_MINUTES, OBD_PENDING_THRESHOLD_MINUTES
+        global CEMENTAPI_SO_PENDING_THRESHOLD_MINUTES, CEMENTAPI_CO_PENDING_THRESHOLD_MINUTES
+        global CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES
+        global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES, OBD_OFFHOURS_START_HOUR, OBD_OFFHOURS_END_HOUR
+        global FRESHLPG_SO_PENDING_THRESHOLD_MINUTES, FRESHLPG_CO_PENDING_THRESHOLD_MINUTES
+        global CALLMEBOT_USER
+        global PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, PSA_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
+        global OBD_PENDING_THRESHOLD_MINUTES_DEFAULT, CEMENTAPI_SO_PENDING_THRESHOLD_MINUTES_DEFAULT
+        global CEMENTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT, CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
+        global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT, FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT
+        global FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT, CALLMEBOT_USER_DEFAULT
         config = load_config()
         parsed_url = urlparse(self.path)
         path = parsed_url.path
@@ -2679,19 +2692,6 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                 content_length = int(self.headers.get('Content-Length', 0))
                 body = self.rfile.read(content_length)
                 update = json.loads(body.decode('utf-8'))
-                
-                global LAST_WEBHOOK_PAYLOAD, LAST_WEBHOOK_ERROR
-                global USER_CONVERSATION_STATE, PSA_SO_PENDING_THRESHOLD_MINUTES, PSA_CO_PENDING_THRESHOLD_MINUTES, OBD_PENDING_THRESHOLD_MINUTES
-                global CEMENTAPI_SO_PENDING_THRESHOLD_MINUTES, CEMENTAPI_CO_PENDING_THRESHOLD_MINUTES
-                global CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES
-                global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES, OBD_OFFHOURS_START_HOUR, OBD_OFFHOURS_END_HOUR
-                global FRESHLPG_SO_PENDING_THRESHOLD_MINUTES, FRESHLPG_CO_PENDING_THRESHOLD_MINUTES
-                global CALLMEBOT_USER
-                global PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, PSA_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
-                global OBD_PENDING_THRESHOLD_MINUTES_DEFAULT, CEMENTAPI_SO_PENDING_THRESHOLD_MINUTES_DEFAULT
-                global CEMENTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT, CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
-                global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT, FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT
-                global FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT, CALLMEBOT_USER_DEFAULT
                 
                 LAST_WEBHOOK_PAYLOAD = update
                 LAST_WEBHOOK_ERROR = None
@@ -3242,6 +3242,53 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             send_telegram_notification(msg, config)
                             self.send_json_response(200, {"status": "ok", "message": msg})
                             return
+                        elif text in ["trigger", "/trigger", "\\trigger", "force_start", "/force_start", "\\force_start"]:
+                            print(f"[{datetime.datetime.now()}] Webhook received 'trigger' command from chat {chat_id}. Force-starting bot services...")
+                            LONG_POLLING_ACTIVE = False
+                            IS_STANDBY = False
+                            ACTIVE_ENV = "Local"
+                            USER_CONVERSATION_STATE = None
+                            save_conv_state()
+
+                            token = config.get("telegram_bot_token")
+                            if token and "YOUR_TELEGRAM" not in token:
+                                try:
+                                    delete_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
+                                    req = urllib.request.Request(delete_url, headers={"User-Agent": "Mozilla/5.0"})
+                                    with urllib.request.urlopen(req, timeout=5) as resp:
+                                        resp.read()
+                                except Exception as e:
+                                    print(f"[{datetime.datetime.now()}] Trigger webhook release note: {e}")
+
+                            confirm_msg = "🚀 *PSA Telegram Notifier Force-Started!*\n\nBot services successfully rebooted & synchronized.\nRunning immediate summary report..."
+                            send_telegram_notification(confirm_msg, config)
+                            
+                            local_now = get_local_time(config)
+                            business_date, _ = get_business_date_and_active(
+                                local_now,
+                                config.get("monitoring_start_hour", 9),
+                                config.get("monitoring_end_hour", 1)
+                            )
+
+                            def async_trigger_handler(b_date, cfg):
+                                try:
+                                    stats = fetch_all_apis(b_date, cfg)
+                                    msg = format_telegram_message(stats, b_date, cfg)
+                                    ok, err = send_telegram_notification(msg, cfg)
+                                    if ok:
+                                        check_and_send_pending_alert(b_date, cfg)
+                                except Exception as thread_err:
+                                    print(f"[{datetime.datetime.now()}] Error handling trigger request in background: {thread_err}")
+
+                            threading.Thread(
+                                target=async_trigger_handler,
+                                args=(business_date, config),
+                                daemon=True
+                            ).start()
+
+                            self.send_json_response(200, {"status": "ok", "message": "Trigger received. Bot force-started and report running."})
+                            return
+
                         if text in ["status", "/status", "report", "/report"]:
                             print(f"[{datetime.datetime.now()}] Webhook received 'status' command from chat {chat_id}. Processing in background...")
                             local_now = get_local_time(config)

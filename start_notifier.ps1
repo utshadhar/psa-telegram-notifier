@@ -129,6 +129,17 @@ while ($true) {
                 if ($Res.ok) {
                     $NetworkAvailable = $true
                 }
+
+                # Check if there are pending Telegram updates waiting on server (stalled long polling detector)
+                $WebhookInfoUrl = "https://api.telegram.org/bot$TelegramToken/getWebhookInfo"
+                $WebhookRes = Invoke-RestMethod -Uri $WebhookInfoUrl -TimeoutSec 5 -ErrorAction SilentlyContinue
+                if ($WebhookRes -and $WebhookRes.ok -and $WebhookRes.result.pending_update_count -gt 0) {
+                    $PendingCount = $WebhookRes.result.pending_update_count
+                    Write-Log "Pending Telegram updates detected on server ($PendingCount). Restarting notifier process to process queue..."
+                    Stop-Notifier
+                    Start-Notifier
+                    Start-Sleep -Seconds 8
+                }
             }
         }
     } catch {}

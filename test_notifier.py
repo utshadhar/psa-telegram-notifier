@@ -1187,5 +1187,31 @@ class TestPSATelegramNotifier(unittest.TestCase):
         self.assertFalse(notifier.validate_callmebot_user_list("UshDhar, 1262260329"))
         self.assertFalse(notifier.validate_callmebot_user_list("-12, +8801838262248"))
 
+    def test_trigger_command(self):
+        """Test /trigger command handler logic."""
+        config = {
+            "telegram_bot_token": "mock_token",
+            "telegram_chat_id": "mock_chat"
+        }
+        handler = notifier.RequestHandler.__new__(notifier.RequestHandler)
+        handler.headers = {"Content-Length": "0"}
+        handler.rfile = unittest.mock.MagicMock()
+        handler.send_json_response = unittest.mock.MagicMock()
+        
+        with patch("notifier.load_config", return_value=config), \
+             patch("notifier.send_telegram_notification", return_value=(True, None)) as mock_send, \
+             patch("urllib.request.urlopen"):
+            
+            # Simulate receiving /trigger text
+            handler.path = "/webhook"
+            update = {"message": {"chat": {"id": "mock_chat"}, "text": "/trigger"}}
+            handler.rfile.read.return_value = json.dumps(update).encode('utf-8')
+            
+            handler.do_POST()
+            
+            # Verify response sent and notification dispatched
+            handler.send_json_response.assert_called_with(200, {"status": "ok", "message": "Trigger received. Bot force-started and report running."})
+            mock_send.assert_called()
+
 if __name__ == '__main__':
     unittest.main()
