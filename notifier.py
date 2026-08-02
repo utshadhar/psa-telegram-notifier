@@ -1530,15 +1530,7 @@ def fetch_all_apis(business_date, config):
 
     return results
 
-def send_telegram_notification(message, config, reply_markup=None):
-    """Sends a formatted message to Telegram. Returns (success, error_message)."""
-    token = config.get("telegram_bot_token")
-    chat_id = config.get("telegram_chat_id")
-    if not token or not chat_id or "YOUR_TELEGRAM" in token or "YOUR_TELEGRAM" in chat_id:
-        err_msg = "Telegram credentials not configured. Skipping message dispatch."
-        print(f"[{datetime.datetime.now()}] {err_msg}")
-        return False, err_msg
-
+def _send_single_telegram_msg(message, token, chat_id, reply_markup=None):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -1581,6 +1573,43 @@ def send_telegram_notification(message, config, reply_markup=None):
     except Exception as e:
         err_msg = f"Exception sending Telegram notification: {e}"
         return False, err_msg
+
+def send_telegram_notification(message, config, reply_markup=None):
+    """Sends a formatted message to Telegram, automatically splitting messages if > 3900 chars."""
+    token = config.get("telegram_bot_token")
+    chat_id = config.get("telegram_chat_id")
+    if not token or not chat_id or "YOUR_TELEGRAM" in token or "YOUR_TELEGRAM" in chat_id:
+        err_msg = "Telegram credentials not configured. Skipping message dispatch."
+        print(f"[{datetime.datetime.now()}] {err_msg}")
+        return False, err_msg
+
+    if not message:
+        return True, "Empty message"
+
+    MAX_LEN = 3900
+    if len(message) > MAX_LEN:
+        chunks = []
+        curr = ""
+        for line in message.splitlines(keepends=True):
+            if len(curr) + len(line) > MAX_LEN:
+                chunks.append(curr)
+                curr = line
+            else:
+                curr += line
+        if curr:
+            chunks.append(curr)
+            
+        success = True
+        last_err = None
+        for idx, chunk in enumerate(chunks):
+            rm = reply_markup if idx == len(chunks) - 1 else None
+            ok, err = _send_single_telegram_msg(chunk, token, chat_id, rm)
+            if not ok:
+                success = False
+                last_err = err
+        return success, last_err
+    else:
+        return _send_single_telegram_msg(message, token, chat_id, reply_markup)
 
 def answer_callback_query(callback_query_id, config):
     token = config.get("telegram_bot_token")
@@ -3315,6 +3344,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     "desc": "psa so pending threshold variable"
                                 },
                                 {
+                                    "key": "f1_start",
+                                    "default": str(F1_START_HOUR_DEFAULT),
+                                    "val": str(F1_START_HOUR),
+                                    "desc": "start hour for f1 window"
+                                },
+                                {
+                                    "key": "f1_end",
+                                    "default": str(F1_END_HOUR_DEFAULT),
+                                    "val": str(F1_END_HOUR),
+                                    "desc": "end hour for f1 window"
+                                },
+                                {
                                     "key": "f2",
                                     "default": f2_def_status,
                                     "val": f2_status,
@@ -3325,6 +3366,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     "default": psa_co_def,
                                     "val": psa_co_val,
                                     "desc": "psa co pending threshold variable"
+                                },
+                                {
+                                    "key": "f2_start",
+                                    "default": str(F2_START_HOUR_DEFAULT),
+                                    "val": str(F2_START_HOUR),
+                                    "desc": "start hour for f2 window"
+                                },
+                                {
+                                    "key": "f2_end",
+                                    "default": str(F2_END_HOUR_DEFAULT),
+                                    "val": str(F2_END_HOUR),
+                                    "desc": "end hour for f2 window"
                                 },
                                 {
                                     "key": "f3",
@@ -3339,6 +3392,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     "desc": "obd pending threshold variable"
                                 },
                                 {
+                                    "key": "f3_start",
+                                    "default": str(F3_START_HOUR_DEFAULT),
+                                    "val": str(F3_START_HOUR),
+                                    "desc": "start hour for f3 window"
+                                },
+                                {
+                                    "key": "f3_end",
+                                    "default": str(F3_END_HOUR_DEFAULT),
+                                    "val": str(F3_END_HOUR),
+                                    "desc": "end hour for f3 window"
+                                },
+                                {
                                     "key": "f4",
                                     "default": f4_def_status,
                                     "val": f4_status,
@@ -3349,6 +3414,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     "default": cementapi_so_def,
                                     "val": cementapi_so_val,
                                     "desc": "cementapi so pending threshold variable"
+                                },
+                                {
+                                    "key": "f4_start",
+                                    "default": str(F4_START_HOUR_DEFAULT),
+                                    "val": str(F4_START_HOUR),
+                                    "desc": "start hour for f4 window"
+                                },
+                                {
+                                    "key": "f4_end",
+                                    "default": str(F4_END_HOUR_DEFAULT),
+                                    "val": str(F4_END_HOUR),
+                                    "desc": "end hour for f4 window"
                                 },
                                 {
                                     "key": "f5",
@@ -3363,6 +3440,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     "desc": "cementapi co pending threshold variable"
                                 },
                                 {
+                                    "key": "f5_start",
+                                    "default": str(F5_START_HOUR_DEFAULT),
+                                    "val": str(F5_START_HOUR),
+                                    "desc": "start hour for f5 window"
+                                },
+                                {
+                                    "key": "f5_end",
+                                    "default": str(F5_END_HOUR_DEFAULT),
+                                    "val": str(F5_END_HOUR),
+                                    "desc": "end hour for f5 window"
+                                },
+                                {
                                     "key": "f6",
                                     "default": f6_def_status,
                                     "val": f6_status,
@@ -3373,6 +3462,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     "default": contractapi_co_def,
                                     "val": contractapi_co_val,
                                     "desc": "contractapi co pending threshold variable"
+                                },
+                                {
+                                    "key": "f6_start",
+                                    "default": str(F6_START_HOUR_DEFAULT),
+                                    "val": str(F6_START_HOUR),
+                                    "desc": "start hour for f6 window"
+                                },
+                                {
+                                    "key": "f6_end",
+                                    "default": str(F6_END_HOUR_DEFAULT),
+                                    "val": str(F6_END_HOUR),
+                                    "desc": "end hour for f6 window"
                                 },
                                 {
                                     "key": "f7",
@@ -3387,13 +3488,13 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     "desc": "smart sales obd off-hours threshold variable"
                                 },
                                 {
-                                    "key": "obd_offhours_start_hour",
+                                    "key": "f7_start / obd_offhours_start_hour",
                                     "default": str(OBD_OFFHOURS_START_HOUR_DEFAULT),
                                     "val": str(OBD_OFFHOURS_START_HOUR),
                                     "desc": "start hour for off-hours obd checker"
                                 },
                                 {
-                                    "key": "obd_offhours_end_hour",
+                                    "key": "f7_end / obd_offhours_end_hour",
                                     "default": str(OBD_OFFHOURS_END_HOUR_DEFAULT),
                                     "val": str(OBD_OFFHOURS_END_HOUR),
                                     "desc": "end hour for off-hours obd checker"
@@ -3417,6 +3518,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     "desc": "freshlpg so pending threshold variable"
                                 },
                                 {
+                                    "key": "f8_start",
+                                    "default": str(F8_START_HOUR_DEFAULT),
+                                    "val": str(F8_START_HOUR),
+                                    "desc": "start hour for f8 window"
+                                },
+                                {
+                                    "key": "f8_end",
+                                    "default": str(F8_END_HOUR_DEFAULT),
+                                    "val": str(F8_END_HOUR),
+                                    "desc": "end hour for f8 window"
+                                },
+                                {
                                     "key": "f9",
                                     "default": f9_def_status,
                                     "val": f9_status,
@@ -3427,6 +3540,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     "default": freshlpg_co_def,
                                     "val": freshlpg_co_val,
                                     "desc": "freshlpg co pending threshold variable"
+                                },
+                                {
+                                    "key": "f9_start",
+                                    "default": str(F9_START_HOUR_DEFAULT),
+                                    "val": str(F9_START_HOUR),
+                                    "desc": "start hour for f9 window"
+                                },
+                                {
+                                    "key": "f9_end",
+                                    "default": str(F9_END_HOUR_DEFAULT),
+                                    "val": str(F9_END_HOUR),
+                                    "desc": "end hour for f9 window"
                                 }
                             ]
                             

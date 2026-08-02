@@ -13,6 +13,17 @@ import notifier
 
 class TestPSATelegramNotifier(unittest.TestCase):
 
+    def setUp(self):
+        notifier.F1_START_HOUR = 0; notifier.F1_END_HOUR = 0
+        notifier.F2_START_HOUR = 0; notifier.F2_END_HOUR = 0
+        notifier.F3_START_HOUR = 0; notifier.F3_END_HOUR = 0
+        notifier.F4_START_HOUR = 0; notifier.F4_END_HOUR = 0
+        notifier.F5_START_HOUR = 0; notifier.F5_END_HOUR = 0
+        notifier.F6_START_HOUR = 0; notifier.F6_END_HOUR = 0
+        notifier.OBD_OFFHOURS_START_HOUR = 0; notifier.OBD_OFFHOURS_END_HOUR = 0
+        notifier.F8_START_HOUR = 0; notifier.F8_END_HOUR = 0
+        notifier.F9_START_HOUR = 0; notifier.F9_END_HOUR = 0
+
     def test_business_date_overnight_active(self):
         """Test overnight active window (e.g., 9 AM to 1 AM next day)"""
         start = 9
