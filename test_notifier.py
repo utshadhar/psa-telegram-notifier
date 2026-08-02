@@ -1213,5 +1213,32 @@ class TestPSATelegramNotifier(unittest.TestCase):
             handler.send_json_response.assert_called_with(200, {"status": "ok", "message": "Trigger received. Bot force-started and report running."})
             mock_send.assert_called()
 
+    def test_midnight_schedule_targets(self):
+        """Test get_next_schedule_target returns 00:05, 00:15, 00:25 midnight triggers."""
+        # 1. At 23:55 -> Next is 00:00 (standard interval)
+        dt = datetime.datetime(2026, 8, 1, 23, 55, 0)
+        target = notifier.get_next_schedule_target(dt, 30)
+        self.assertEqual(target, datetime.datetime(2026, 8, 2, 0, 0, 0))
+
+        # 2. At 00:01 -> Next is 00:05 (midnight trigger)
+        dt = datetime.datetime(2026, 8, 2, 0, 1, 0)
+        target = notifier.get_next_schedule_target(dt, 30)
+        self.assertEqual(target, datetime.datetime(2026, 8, 2, 0, 5, 0))
+
+        # 3. At 00:06 -> Next is 00:15 (midnight trigger)
+        dt = datetime.datetime(2026, 8, 2, 0, 6, 0)
+        target = notifier.get_next_schedule_target(dt, 30)
+        self.assertEqual(target, datetime.datetime(2026, 8, 2, 0, 15, 0))
+
+        # 4. At 00:16 -> Next is 00:25 (midnight trigger)
+        dt = datetime.datetime(2026, 8, 2, 0, 16, 0)
+        target = notifier.get_next_schedule_target(dt, 30)
+        self.assertEqual(target, datetime.datetime(2026, 8, 2, 0, 25, 0))
+
+        # 5. At 00:26 -> Next is 00:30 (standard interval)
+        dt = datetime.datetime(2026, 8, 2, 0, 26, 0)
+        target = notifier.get_next_schedule_target(dt, 30)
+        self.assertEqual(target, datetime.datetime(2026, 8, 2, 0, 30, 0))
+
 if __name__ == '__main__':
     unittest.main()

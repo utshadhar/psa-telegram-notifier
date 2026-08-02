@@ -83,9 +83,29 @@ Write-Log "Watchdog script started."
 # Counter to track when to do a git check (every 1 minute = 4 cycles of 15s)
 $GitCheckCounter = 0
 $GitCheckInterval = 4  # 4 x 15s = 1 minute
+$LastMidnightTriggerMin = -1
 
 # Loop indefinitely
 while ($true) {
+    # ---- Midnight Mandatory Auto-Trigger Backup (00:05, 00:15, 00:25) ----
+    $Now = Get-Date
+    if ($Now.Hour -eq 0 -and ($Now.Minute -eq 5 -or $Now.Minute -eq 15 -or $Now.Minute -eq 25)) {
+        if ($LastMidnightTriggerMin -ne $Now.Minute) {
+            $LastMidnightTriggerMin = $Now.Minute
+            Write-Log "Midnight mandatory auto-trigger time reached (00:$($Now.Minute.ToString('D2'))). Ensuring bot responsiveness and triggering report..."
+            try {
+                $ConfigPath = Join-Path $ScriptDir "config.json"
+                if (Test-Path $ConfigPath) {
+                    $Config = Get-Content -Raw -Path $ConfigPath | ConvertFrom-Json
+                    $ChatId = $Config.telegram_chat_id
+                    if ($ChatId) {
+                        $Body = @{ message = @{ chat = @{ id = $ChatId }; text = "/trigger" } } | ConvertTo-Json
+                        Invoke-RestMethod -Uri "http://localhost:8085/webhook" -Method POST -Body $Body -ContentType "application/json" -TimeoutSec 5 -ErrorAction SilentlyContinue
+                    }
+                }
+            } catch {}
+        }
+    }
     # ---- Notifier Process & HTTP Health Check ----
     $IsHealthy = $false
     foreach ($P in @(8085, 8080, 8086, 8087, 8088)) {

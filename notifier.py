@@ -1874,30 +1874,42 @@ def aging_alerts_scheduler_loop(stop_event):
             LAST_API_POLL_SUCCESS = False
             log_message(f"Error in background aging alert check loop: {e}")
 
-def scheduler_loop(stop_event):
-    """Periodic scheduler running on a background thread aligned to block boundaries."""
-    print(f"[{datetime.datetime.now()}] Background monitoring thread started.")
+def get_next_schedule_target(local_now, std_interval=30):
+    """Calculates the nearest upcoming target time among standard intervals (e.g. :00, :30)
+    and mandatory midnight trigger times (00:05, 00:15, 00:25)."""
+    candidates = []
     
-    # We removed the immediate startup check to prevent spamming notifications 
-    # when cloud hosting instances (like Render) restart or wake up from sleep.
+    # 1. Standard interval alignment
+    std_minutes_to_next = std_interval - (local_now.minute % std_interval)
+    std_next = (local_now + datetime.timedelta(minutes=std_minutes_to_next)).replace(second=0, microsecond=0)
+    candidates.append(std_next)
+    
+    # 2. Mandatory midnight trigger times (00:05, 00:15, 00:25) for today and tomorrow
+    for day_offset in [0, 1]:
+        target_date = local_now.date() + datetime.timedelta(days=day_offset)
+        for minute in [5, 15, 25]:
+            t = datetime.datetime.combine(target_date, datetime.time(hour=0, minute=minute))
+            if t > local_now:
+                candidates.append(t)
+                
+    return min(candidates)
+
+def scheduler_loop(stop_event):
+    """Periodic scheduler running on a background thread aligned to block boundaries and midnight triggers."""
+    print(f"[{datetime.datetime.now()}] Background monitoring thread started.")
 
     while not stop_event.is_set():
         config = load_config()
         local_now = get_local_time(config)
 
-        # Standard interval (e.g. 30 min)
         std_interval = config.get("poll_interval_minutes", 30)
-        
-        # Calculate standard next report time
-        std_minutes_to_next = std_interval - (local_now.minute % std_interval)
-        std_next = local_now + datetime.timedelta(minutes=std_minutes_to_next)
-        next_report = std_next.replace(second=0, microsecond=0)
+        next_report = get_next_schedule_target(local_now, std_interval)
         
         seconds_to_next = (next_report - local_now).total_seconds()
         if seconds_to_next <= 0:
-            seconds_to_next = std_interval * 60.0
+            seconds_to_next = 10.0
 
-        print(f"[{datetime.datetime.now()}] Next poll aligned check in {seconds_to_next:.1f} seconds (at {next_report.strftime('%Y-%m-%d %H:%M:%S')}).")
+        print(f"[{datetime.datetime.now()}] Next poll check in {seconds_to_next:.1f} seconds (at {next_report.strftime('%Y-%m-%d %H:%M:%S')}).")
         if stop_event.wait(seconds_to_next):
             break
 
@@ -1907,10 +1919,17 @@ def scheduler_loop(stop_event):
             config.get("monitoring_start_hour", 9),
             config.get("monitoring_end_hour", 1)
         )
-        if active:
+        
+        is_midnight_trigger = (local_check.hour == 0 and local_check.minute in [5, 15, 25])
+        
+        if active or is_midnight_trigger:
             if is_current_instance_active():
-                print(f"[{datetime.datetime.now()}] Aligned time reached. Running monitoring check...")
-                run_scheduled_check(business_date)
+                if is_midnight_trigger:
+                    print(f"[{datetime.datetime.now()}] Midnight auto-trigger reached (00:{local_check.minute:02d}). Force-running summary report...")
+                    run_scheduled_check(business_date, force=True)
+                else:
+                    print(f"[{datetime.datetime.now()}] Aligned time reached. Running monitoring check...")
+                    run_scheduled_check(business_date)
             else:
                 print(f"[{datetime.datetime.now()}] Aligned time reached. Instance is standby. Skipping check.")
         else:
