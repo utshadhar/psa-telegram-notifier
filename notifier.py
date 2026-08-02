@@ -196,11 +196,55 @@ FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT = 15
 FRESHLPG_CO_PENDING_THRESHOLD_MINUTES = 10
 FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT = 10
 
+F1_START_HOUR = 0
+F1_START_HOUR_DEFAULT = 0
+F1_END_HOUR = 0
+F1_END_HOUR_DEFAULT = 0
+
+F2_START_HOUR = 0
+F2_START_HOUR_DEFAULT = 0
+F2_END_HOUR = 0
+F2_END_HOUR_DEFAULT = 0
+
+F3_START_HOUR = 0
+F3_START_HOUR_DEFAULT = 0
+F3_END_HOUR = 0
+F3_END_HOUR_DEFAULT = 0
+
+F4_START_HOUR = 0
+F4_START_HOUR_DEFAULT = 0
+F4_END_HOUR = 0
+F4_END_HOUR_DEFAULT = 0
+
+F5_START_HOUR = 0
+F5_START_HOUR_DEFAULT = 0
+F5_END_HOUR = 0
+F5_END_HOUR_DEFAULT = 0
+
+F6_START_HOUR = 0
+F6_START_HOUR_DEFAULT = 0
+F6_END_HOUR = 0
+F6_END_HOUR_DEFAULT = 0
+
 OBD_OFFHOURS_START_HOUR = 0
 OBD_OFFHOURS_START_HOUR_DEFAULT = 0
-
 OBD_OFFHOURS_END_HOUR = 0
 OBD_OFFHOURS_END_HOUR_DEFAULT = 0
+
+F7_START_HOUR = 0
+F7_START_HOUR_DEFAULT = 0
+F7_END_HOUR = 0
+F7_END_HOUR_DEFAULT = 0
+
+F8_START_HOUR = 0
+F8_START_HOUR_DEFAULT = 0
+F8_END_HOUR = 0
+F8_END_HOUR_DEFAULT = 0
+
+F9_START_HOUR = 0
+F9_START_HOUR_DEFAULT = 0
+F9_END_HOUR = 0
+F9_END_HOUR_DEFAULT = 0
 
 CALLMEBOT_USER = "@UshDhar"
 CALLMEBOT_USER_DEFAULT = "+8801838262248"
@@ -231,6 +275,9 @@ def load_thresholds():
     global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES, OBD_OFFHOURS_START_HOUR, OBD_OFFHOURS_END_HOUR
     global FRESHLPG_SO_PENDING_THRESHOLD_MINUTES, FRESHLPG_CO_PENDING_THRESHOLD_MINUTES
     global CALLMEBOT_USER
+    global F1_START_HOUR, F1_END_HOUR, F2_START_HOUR, F2_END_HOUR, F3_START_HOUR, F3_END_HOUR
+    global F4_START_HOUR, F4_END_HOUR, F5_START_HOUR, F5_END_HOUR, F6_START_HOUR, F6_END_HOUR
+    global F7_START_HOUR, F7_END_HOUR, F8_START_HOUR, F8_END_HOUR, F9_START_HOUR, F9_END_HOUR
     
     global PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, PSA_CO_PENDING_THRESHOLD_MINUTES_DEFAULT, OBD_PENDING_THRESHOLD_MINUTES_DEFAULT
     global CEMENTAPI_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, CEMENTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
@@ -238,6 +285,11 @@ def load_thresholds():
     global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT, OBD_OFFHOURS_START_HOUR_DEFAULT, OBD_OFFHOURS_END_HOUR_DEFAULT
     global FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
     global CALLMEBOT_USER_DEFAULT
+    global F1_START_HOUR_DEFAULT, F1_END_HOUR_DEFAULT, F2_START_HOUR_DEFAULT, F2_END_HOUR_DEFAULT
+    global F3_START_HOUR_DEFAULT, F3_END_HOUR_DEFAULT, F4_START_HOUR_DEFAULT, F4_END_HOUR_DEFAULT
+    global F5_START_HOUR_DEFAULT, F5_END_HOUR_DEFAULT, F6_START_HOUR_DEFAULT, F6_END_HOUR_DEFAULT
+    global F7_START_HOUR_DEFAULT, F7_END_HOUR_DEFAULT, F8_START_HOUR_DEFAULT, F8_END_HOUR_DEFAULT
+    global F9_START_HOUR_DEFAULT, F9_END_HOUR_DEFAULT
     
     global PREFERRED_ENV, ACTIVE_ENV, CONFIG_ERROR
 
@@ -253,6 +305,15 @@ def load_thresholds():
         "FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT": 10,
         "OBD_OFFHOURS_START_HOUR_DEFAULT": 0,
         "OBD_OFFHOURS_END_HOUR_DEFAULT": 0,
+        "F1_START_HOUR_DEFAULT": 0, "F1_END_HOUR_DEFAULT": 0,
+        "F2_START_HOUR_DEFAULT": 0, "F2_END_HOUR_DEFAULT": 0,
+        "F3_START_HOUR_DEFAULT": 0, "F3_END_HOUR_DEFAULT": 0,
+        "F4_START_HOUR_DEFAULT": 0, "F4_END_HOUR_DEFAULT": 0,
+        "F5_START_HOUR_DEFAULT": 0, "F5_END_HOUR_DEFAULT": 0,
+        "F6_START_HOUR_DEFAULT": 0, "F6_END_HOUR_DEFAULT": 0,
+        "F7_START_HOUR_DEFAULT": 0, "F7_END_HOUR_DEFAULT": 0,
+        "F8_START_HOUR_DEFAULT": 0, "F8_END_HOUR_DEFAULT": 0,
+        "F9_START_HOUR_DEFAULT": 0, "F9_END_HOUR_DEFAULT": 0,
         "CALLMEBOT_USER_DEFAULT": "@UshDhar, +8801838262248",
         
         "PSA_SO_PENDING_THRESHOLD_MINUTES": None,
@@ -266,6 +327,15 @@ def load_thresholds():
         "FRESHLPG_CO_PENDING_THRESHOLD_MINUTES": None,
         "OBD_OFFHOURS_START_HOUR": None,
         "OBD_OFFHOURS_END_HOUR": None,
+        "F1_START_HOUR": None, "F1_END_HOUR": None,
+        "F2_START_HOUR": None, "F2_END_HOUR": None,
+        "F3_START_HOUR": None, "F3_END_HOUR": None,
+        "F4_START_HOUR": None, "F4_END_HOUR": None,
+        "F5_START_HOUR": None, "F5_END_HOUR": None,
+        "F6_START_HOUR": None, "F6_END_HOUR": None,
+        "F7_START_HOUR": None, "F7_END_HOUR": None,
+        "F8_START_HOUR": None, "F8_END_HOUR": None,
+        "F9_START_HOUR": None, "F9_END_HOUR": None,
         "CALLMEBOT_USER": None,
         
         "PREFERRED_ENV": "Local"
@@ -327,6 +397,17 @@ def load_thresholds():
     FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT = defaults["FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT"]
     OBD_OFFHOURS_START_HOUR_DEFAULT = defaults["OBD_OFFHOURS_START_HOUR_DEFAULT"]
     OBD_OFFHOURS_END_HOUR_DEFAULT = defaults["OBD_OFFHOURS_END_HOUR_DEFAULT"]
+    
+    F1_START_HOUR_DEFAULT = defaults["F1_START_HOUR_DEFAULT"]; F1_END_HOUR_DEFAULT = defaults["F1_END_HOUR_DEFAULT"]
+    F2_START_HOUR_DEFAULT = defaults["F2_START_HOUR_DEFAULT"]; F2_END_HOUR_DEFAULT = defaults["F2_END_HOUR_DEFAULT"]
+    F3_START_HOUR_DEFAULT = defaults["F3_START_HOUR_DEFAULT"]; F3_END_HOUR_DEFAULT = defaults["F3_END_HOUR_DEFAULT"]
+    F4_START_HOUR_DEFAULT = defaults["F4_START_HOUR_DEFAULT"]; F4_END_HOUR_DEFAULT = defaults["F4_END_HOUR_DEFAULT"]
+    F5_START_HOUR_DEFAULT = defaults["F5_START_HOUR_DEFAULT"]; F5_END_HOUR_DEFAULT = defaults["F5_END_HOUR_DEFAULT"]
+    F6_START_HOUR_DEFAULT = defaults["F6_START_HOUR_DEFAULT"]; F6_END_HOUR_DEFAULT = defaults["F6_END_HOUR_DEFAULT"]
+    F7_START_HOUR_DEFAULT = OBD_OFFHOURS_START_HOUR_DEFAULT; F7_END_HOUR_DEFAULT = OBD_OFFHOURS_END_HOUR_DEFAULT
+    F8_START_HOUR_DEFAULT = defaults["F8_START_HOUR_DEFAULT"]; F8_END_HOUR_DEFAULT = defaults["F8_END_HOUR_DEFAULT"]
+    F9_START_HOUR_DEFAULT = defaults["F9_START_HOUR_DEFAULT"]; F9_END_HOUR_DEFAULT = defaults["F9_END_HOUR_DEFAULT"]
+    
     CALLMEBOT_USER_DEFAULT = defaults["CALLMEBOT_USER_DEFAULT"]
     PREFERRED_ENV = defaults["PREFERRED_ENV"]
 
@@ -345,6 +426,24 @@ def load_thresholds():
     FRESHLPG_CO_PENDING_THRESHOLD_MINUTES = defaults["FRESHLPG_CO_PENDING_THRESHOLD_MINUTES"] if defaults["FRESHLPG_CO_PENDING_THRESHOLD_MINUTES"] is not None else FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
     OBD_OFFHOURS_START_HOUR = defaults["OBD_OFFHOURS_START_HOUR"] if defaults["OBD_OFFHOURS_START_HOUR"] is not None else OBD_OFFHOURS_START_HOUR_DEFAULT
     OBD_OFFHOURS_END_HOUR = defaults["OBD_OFFHOURS_END_HOUR"] if defaults["OBD_OFFHOURS_END_HOUR"] is not None else OBD_OFFHOURS_END_HOUR_DEFAULT
+    
+    F1_START_HOUR = defaults["F1_START_HOUR"] if defaults["F1_START_HOUR"] is not None else F1_START_HOUR_DEFAULT
+    F1_END_HOUR = defaults["F1_END_HOUR"] if defaults["F1_END_HOUR"] is not None else F1_END_HOUR_DEFAULT
+    F2_START_HOUR = defaults["F2_START_HOUR"] if defaults["F2_START_HOUR"] is not None else F2_START_HOUR_DEFAULT
+    F2_END_HOUR = defaults["F2_END_HOUR"] if defaults["F2_END_HOUR"] is not None else F2_END_HOUR_DEFAULT
+    F3_START_HOUR = defaults["F3_START_HOUR"] if defaults["F3_START_HOUR"] is not None else F3_START_HOUR_DEFAULT
+    F3_END_HOUR = defaults["F3_END_HOUR"] if defaults["F3_END_HOUR"] is not None else F3_END_HOUR_DEFAULT
+    F4_START_HOUR = defaults["F4_START_HOUR"] if defaults["F4_START_HOUR"] is not None else F4_START_HOUR_DEFAULT
+    F4_END_HOUR = defaults["F4_END_HOUR"] if defaults["F4_END_HOUR"] is not None else F4_END_HOUR_DEFAULT
+    F5_START_HOUR = defaults["F5_START_HOUR"] if defaults["F5_START_HOUR"] is not None else F5_START_HOUR_DEFAULT
+    F5_END_HOUR = defaults["F5_END_HOUR"] if defaults["F5_END_HOUR"] is not None else F5_END_HOUR_DEFAULT
+    F6_START_HOUR = defaults["F6_START_HOUR"] if defaults["F6_START_HOUR"] is not None else F6_START_HOUR_DEFAULT
+    F6_END_HOUR = defaults["F6_END_HOUR"] if defaults["F6_END_HOUR"] is not None else F6_END_HOUR_DEFAULT
+    F7_START_HOUR = OBD_OFFHOURS_START_HOUR; F7_END_HOUR = OBD_OFFHOURS_END_HOUR
+    F8_START_HOUR = defaults["F8_START_HOUR"] if defaults["F8_START_HOUR"] is not None else F8_START_HOUR_DEFAULT
+    F8_END_HOUR = defaults["F8_END_HOUR"] if defaults["F8_END_HOUR"] is not None else F8_END_HOUR_DEFAULT
+    F9_START_HOUR = defaults["F9_START_HOUR"] if defaults["F9_START_HOUR"] is not None else F9_START_HOUR_DEFAULT
+    F9_END_HOUR = defaults["F9_END_HOUR"] if defaults["F9_END_HOUR"] is not None else F9_END_HOUR_DEFAULT
     CALLMEBOT_USER = defaults["CALLMEBOT_USER"] if defaults["CALLMEBOT_USER"] is not None else CALLMEBOT_USER_DEFAULT
 
     load_conv_state()
@@ -395,6 +494,15 @@ def save_thresholds():
         "FRESHLPG_CO_PENDING_THRESHOLD_MINUTES": FRESHLPG_CO_PENDING_THRESHOLD_MINUTES,
         "OBD_OFFHOURS_START_HOUR": OBD_OFFHOURS_START_HOUR,
         "OBD_OFFHOURS_END_HOUR": OBD_OFFHOURS_END_HOUR,
+        "F1_START_HOUR": F1_START_HOUR, "F1_END_HOUR": F1_END_HOUR,
+        "F2_START_HOUR": F2_START_HOUR, "F2_END_HOUR": F2_END_HOUR,
+        "F3_START_HOUR": F3_START_HOUR, "F3_END_HOUR": F3_END_HOUR,
+        "F4_START_HOUR": F4_START_HOUR, "F4_END_HOUR": F4_END_HOUR,
+        "F5_START_HOUR": F5_START_HOUR, "F5_END_HOUR": F5_END_HOUR,
+        "F6_START_HOUR": F6_START_HOUR, "F6_END_HOUR": F6_END_HOUR,
+        "F7_START_HOUR": OBD_OFFHOURS_START_HOUR, "F7_END_HOUR": OBD_OFFHOURS_END_HOUR,
+        "F8_START_HOUR": F8_START_HOUR, "F8_END_HOUR": F8_END_HOUR,
+        "F9_START_HOUR": F9_START_HOUR, "F9_END_HOUR": F9_END_HOUR,
         "CALLMEBOT_USER": CALLMEBOT_USER,
 
         "PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT": PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT,
@@ -408,6 +516,15 @@ def save_thresholds():
         "FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT": FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT,
         "OBD_OFFHOURS_START_HOUR_DEFAULT": OBD_OFFHOURS_START_HOUR_DEFAULT,
         "OBD_OFFHOURS_END_HOUR_DEFAULT": OBD_OFFHOURS_END_HOUR_DEFAULT,
+        "F1_START_HOUR_DEFAULT": F1_START_HOUR_DEFAULT, "F1_END_HOUR_DEFAULT": F1_END_HOUR_DEFAULT,
+        "F2_START_HOUR_DEFAULT": F2_START_HOUR_DEFAULT, "F2_END_HOUR_DEFAULT": F2_END_HOUR_DEFAULT,
+        "F3_START_HOUR_DEFAULT": F3_START_HOUR_DEFAULT, "F3_END_HOUR_DEFAULT": F3_END_HOUR_DEFAULT,
+        "F4_START_HOUR_DEFAULT": F4_START_HOUR_DEFAULT, "F4_END_HOUR_DEFAULT": F4_END_HOUR_DEFAULT,
+        "F5_START_HOUR_DEFAULT": F5_START_HOUR_DEFAULT, "F5_END_HOUR_DEFAULT": F5_END_HOUR_DEFAULT,
+        "F6_START_HOUR_DEFAULT": F6_START_HOUR_DEFAULT, "F6_END_HOUR_DEFAULT": F6_END_HOUR_DEFAULT,
+        "F7_START_HOUR_DEFAULT": OBD_OFFHOURS_START_HOUR_DEFAULT, "F7_END_HOUR_DEFAULT": OBD_OFFHOURS_END_HOUR_DEFAULT,
+        "F8_START_HOUR_DEFAULT": F8_START_HOUR_DEFAULT, "F8_END_HOUR_DEFAULT": F8_END_HOUR_DEFAULT,
+        "F9_START_HOUR_DEFAULT": F9_START_HOUR_DEFAULT, "F9_END_HOUR_DEFAULT": F9_END_HOUR_DEFAULT,
         "CALLMEBOT_USER_DEFAULT": CALLMEBOT_USER_DEFAULT,
         "PREFERRED_ENV": PREFERRED_ENV
     }
@@ -820,9 +937,28 @@ def clear_aging_memory(proc_type, api_name=None):
             del PENDING_ALERTS_SENT[k]
     log_message(f"Cleared aging memory for: {proc_type} (API: {api_name})")
 
+def is_feature_active_at_hour(feat_key, current_hour, active_global):
+    """Checks if a feature (f1..f9) is active based on its custom start/end hour range or global active status."""
+    if feat_key == "f7":
+        start_var = "OBD_OFFHOURS_START_HOUR"
+        end_var = "OBD_OFFHOURS_END_HOUR"
+    else:
+        start_var = f"{feat_key.upper()}_START_HOUR"
+        end_var = f"{feat_key.upper()}_END_HOUR"
+        
+    start_hour = globals().get(start_var, 0)
+    end_hour = globals().get(end_var, 0)
+    
+    # If custom start/end hours are defined (i.e. start != 0 or end != 0)
+    if start_hour != 0 or end_hour != 0:
+        return is_hour_in_range(current_hour, start_hour, end_hour)
+    
+    # Fallback to global active monitoring hours
+    return active_global
+
 def track_and_alert_aging(tx_id, server, process_type, api_name, config):
     """
-    Tracks the first seen time of a pending transaction, calculates its age,
+    Tracks pending transaction aging memory, calculates total duration,
     and dispatches a Telegram notification if it crosses the configured threshold.
     """
     if not api_name or not config:
@@ -833,6 +969,9 @@ def track_and_alert_aging(tx_id, server, process_type, api_name, config):
     global CEMENTAPI_SO_PENDING_THRESHOLD_MINUTES, CEMENTAPI_CO_PENDING_THRESHOLD_MINUTES
     global CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES
     global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES, OBD_OFFHOURS_START_HOUR, OBD_OFFHOURS_END_HOUR
+    global F1_START_HOUR, F1_END_HOUR, F2_START_HOUR, F2_END_HOUR, F3_START_HOUR, F3_END_HOUR
+    global F4_START_HOUR, F4_END_HOUR, F5_START_HOUR, F5_END_HOUR, F6_START_HOUR, F6_END_HOUR
+    global F7_START_HOUR, F7_END_HOUR, F8_START_HOUR, F8_END_HOUR, F9_START_HOUR, F9_END_HOUR
     
     current_time = get_local_time(config)
     
@@ -847,12 +986,24 @@ def track_and_alert_aging(tx_id, server, process_type, api_name, config):
     is_obd = "obd" in api_name.lower() or api_name.lower() == "api_3"
     proc_key = "OBD" if is_obd else process_type
     
-    is_f7_window = is_obd and is_hour_in_range(current_time.hour, OBD_OFFHOURS_START_HOUR, OBD_OFFHOURS_END_HOUR)
+    is_f7_window = is_obd and is_hour_in_range(current_time.hour, OBD_OFFHOURS_START_HOUR, OBD_OFFHOURS_END_HOUR) and (OBD_OFFHOURS_START_HOUR != 0 or OBD_OFFHOURS_END_HOUR != 0)
     
-    if not active:
-        # If outside active hours, only allow f7 window check
-        if not is_f7_window:
-            return
+    # Determine feature key (f1..f9)
+    if is_obd:
+        feat_key = "f7" if is_f7_window else "f3"
+    elif api_name == "PSA":
+        feat_key = "f1" if process_type == "SO" else "f2"
+    elif api_name in ["API_2", "SmartSales_Pending_Orders"]:
+        feat_key = "f4" if process_type == "SO" else "f5"
+    elif api_name in ["API_4", "SAP_Contract_Pending"]:
+        feat_key = "f6"
+    elif api_name in ["API_5", "FreshLPG_Pending_Orders", "freshlpg"]:
+        feat_key = "f8" if process_type == "SO" else "f9"
+    else:
+        feat_key = "f1"
+
+    if not is_feature_active_at_hour(feat_key, current_time.hour, active):
+        return
             
     key = (proc_key, api_name, tx_id)
     
@@ -1737,16 +1888,28 @@ def register_bot_commands(config):
         {"command": "status", "description": "Get immediate report of all active APIs"},
         {"command": "report", "description": "Get immediate report of all active APIs"},
         {"command": "f1", "description": "PSA SO checker threshold"},
+        {"command": "f1_start", "description": "Set start hour for f1 window"},
+        {"command": "f1_end", "description": "Set end hour for f1 window"},
         {"command": "o1", "description": "Turn off PSA SO checker"},
         {"command": "f2", "description": "PSA CO checker threshold"},
+        {"command": "f2_start", "description": "Set start hour for f2 window"},
+        {"command": "f2_end", "description": "Set end hour for f2 window"},
         {"command": "o2", "description": "Turn off PSA CO checker"},
         {"command": "f3", "description": "SmartSales OBD checker threshold"},
+        {"command": "f3_start", "description": "Set start hour for f3 window"},
+        {"command": "f3_end", "description": "Set end hour for f3 window"},
         {"command": "o3", "description": "Turn off SmartSales OBD checker"},
         {"command": "f4", "description": "Cement SO checker threshold"},
+        {"command": "f4_start", "description": "Set start hour for f4 window"},
+        {"command": "f4_end", "description": "Set end hour for f4 window"},
         {"command": "o4", "description": "Turn off Cement SO checker"},
         {"command": "f5", "description": "Cement CO checker threshold"},
+        {"command": "f5_start", "description": "Set start hour for f5 window"},
+        {"command": "f5_end", "description": "Set end hour for f5 window"},
         {"command": "o5", "description": "Turn off Cement CO checker"},
         {"command": "f6", "description": "SAP Contract checker threshold"},
+        {"command": "f6_start", "description": "Set start hour for f6 window"},
+        {"command": "f6_end", "description": "Set end hour for f6 window"},
         {"command": "o6", "description": "Turn off SAP Contract checker"},
         {"command": "f7", "description": "Off-Hours SmartSales OBD checker threshold"},
         {"command": "f7_start", "description": "Set start hour for f7 off-hours window"},
@@ -1755,8 +1918,12 @@ def register_bot_commands(config):
         {"command": "o7", "description": "Turn off f7 off-hours OBD checker and voice calls"},
         {"command": "f7_test", "description": "Initiate a test CallMeBot voice call instantly"},
         {"command": "f8", "description": "FreshLPG SO checker threshold"},
+        {"command": "f8_start", "description": "Set start hour for f8 window"},
+        {"command": "f8_end", "description": "Set end hour for f8 window"},
         {"command": "o8", "description": "Turn off FreshLPG SO checker"},
         {"command": "f9", "description": "FreshLPG CO checker threshold"},
+        {"command": "f9_start", "description": "Set start hour for f9 window"},
+        {"command": "f9_end", "description": "Set end hour for f9 window"},
         {"command": "o9", "description": "Turn off FreshLPG CO checker"}
     ]
     
@@ -2152,6 +2319,22 @@ CONV_FEATURE_MAP = {
         "clear_args": [],
         "is_hour": True
     },
+    "f1_start": {"var": "F1_START_HOUR", "default_var": "F1_START_HOUR_DEFAULT", "label": "in which hour I want to start f1", "default_prompt": "default hour I want to start f1", "current_prompt": "in which hour I want to start f1.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f1_end": {"var": "F1_END_HOUR", "default_var": "F1_END_HOUR_DEFAULT", "label": "in which hour I want to end f1", "default_prompt": "default hour I want to end f1", "current_prompt": "in which hour I want to end f1.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f2_start": {"var": "F2_START_HOUR", "default_var": "F2_START_HOUR_DEFAULT", "label": "in which hour I want to start f2", "default_prompt": "default hour I want to start f2", "current_prompt": "in which hour I want to start f2.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f2_end": {"var": "F2_END_HOUR", "default_var": "F2_END_HOUR_DEFAULT", "label": "in which hour I want to end f2", "default_prompt": "default hour I want to end f2", "current_prompt": "in which hour I want to end f2.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f3_start": {"var": "F3_START_HOUR", "default_var": "F3_START_HOUR_DEFAULT", "label": "in which hour I want to start f3", "default_prompt": "default hour I want to start f3", "current_prompt": "in which hour I want to start f3.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f3_end": {"var": "F3_END_HOUR", "default_var": "F3_END_HOUR_DEFAULT", "label": "in which hour I want to end f3", "default_prompt": "default hour I want to end f3", "current_prompt": "in which hour I want to end f3.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f4_start": {"var": "F4_START_HOUR", "default_var": "F4_START_HOUR_DEFAULT", "label": "in which hour I want to start f4", "default_prompt": "default hour I want to start f4", "current_prompt": "in which hour I want to start f4.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f4_end": {"var": "F4_END_HOUR", "default_var": "F4_END_HOUR_DEFAULT", "label": "in which hour I want to end f4", "default_prompt": "default hour I want to end f4", "current_prompt": "in which hour I want to end f4.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f5_start": {"var": "F5_START_HOUR", "default_var": "F5_START_HOUR_DEFAULT", "label": "in which hour I want to start f5", "default_prompt": "default hour I want to start f5", "current_prompt": "in which hour I want to start f5.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f5_end": {"var": "F5_END_HOUR", "default_var": "F5_END_HOUR_DEFAULT", "label": "in which hour I want to end f5", "default_prompt": "default hour I want to end f5", "current_prompt": "in which hour I want to end f5.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f6_start": {"var": "F6_START_HOUR", "default_var": "F6_START_HOUR_DEFAULT", "label": "in which hour I want to start f6", "default_prompt": "default hour I want to start f6", "current_prompt": "in which hour I want to start f6.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f6_end": {"var": "F6_END_HOUR", "default_var": "F6_END_HOUR_DEFAULT", "label": "in which hour I want to end f6", "default_prompt": "default hour I want to end f6", "current_prompt": "in which hour I want to end f6.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f8_start": {"var": "F8_START_HOUR", "default_var": "F8_START_HOUR_DEFAULT", "label": "in which hour I want to start f8", "default_prompt": "default hour I want to start f8", "current_prompt": "in which hour I want to start f8.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f8_end": {"var": "F8_END_HOUR", "default_var": "F8_END_HOUR_DEFAULT", "label": "in which hour I want to end f8", "default_prompt": "default hour I want to end f8", "current_prompt": "in which hour I want to end f8.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f9_start": {"var": "F9_START_HOUR", "default_var": "F9_START_HOUR_DEFAULT", "label": "in which hour I want to start f9", "default_prompt": "default hour I want to start f9", "current_prompt": "in which hour I want to start f9.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f9_end": {"var": "F9_END_HOUR", "default_var": "F9_END_HOUR_DEFAULT", "label": "in which hour I want to end f9", "default_prompt": "default hour I want to end f9", "current_prompt": "in which hour I want to end f9.", "fallback_default": 0, "clear_args": [], "is_hour": True},
     "f7_user": {
         "var": "CALLMEBOT_USER",
         "default_var": "CALLMEBOT_USER_DEFAULT",
@@ -3020,6 +3203,12 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                 USER_CONVERSATION_STATE = None
                                 self.send_json_response(200, {"status": "ok", "message": msg})
                                 return
+
+                        start_end_match = re.match(r'^(?:/)?f([1-9])_(start|end)$', text)
+                        if start_end_match:
+                            feat_num, action = start_end_match.groups()
+                            start_feature_conversation(self, f"f{feat_num}_{action}", config)
+                            return
 
                         # Direct command triggers
                         if text in ["f1", "f1 on", "/f1", "/f1_on"]:
