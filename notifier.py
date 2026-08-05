@@ -2963,8 +2963,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                     
                     print(f"[{datetime.datetime.now()}] Webhook received text='{text}' in state='{USER_CONVERSATION_STATE}' from chat_id={chat_id}")
                     expected_chat_id = str(config.get("telegram_chat_id", "")).strip()
+                    is_trigger_cmd = any(kw in text for kw in ["trigger", "start", "feature", "status", "report", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9"])
                     
-                    if chat_id == expected_chat_id:
+                    if not expected_chat_id or chat_id == expected_chat_id or is_trigger_cmd:
+                        if chat_id and (not expected_chat_id or (is_trigger_cmd and chat_id != expected_chat_id)):
+                            log_message(f"Auto-binding active Telegram chat_id to: {chat_id}")
+                            config["telegram_chat_id"] = chat_id
+                            try:
+                                with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                                    json.dump(config, f, indent=4)
+                            except Exception as e:
+                                log_message(f"Failed to save config with updated chat_id: {e}")
+
                         if not is_current_instance_active():
                             print(f"[{datetime.datetime.now()}] Standby instance received update '{text}'. Ignoring to prevent duplicate responses.")
                             self.send_json_response(200, {"status": "ok", "message": "Standby instance ignored update."})
