@@ -119,21 +119,10 @@ while ($true) {
     }
 
     if (-not $IsHealthy) {
-        $Processes = Get-CimInstance Win32_Process -Filter "Name like '%python%'" -ErrorAction SilentlyContinue | Where-Object {
-            $_.CommandLine -like "*notifier.py*"
-        }
-        if ($Processes -and @($Processes).Count -gt 1) {
-            Write-Log "Multiple notifier processes detected ($(@($Processes).Count)). Killing all and restarting one clean instance..."
-            Stop-Notifier
-            $Processes = $null
-        }
-
-        if (-not $Processes -or @($Processes).Count -eq 0) {
-            Write-Log "Notifier process is NOT running or unresponsive. Starting notifier..."
-            Stop-Notifier
-            Start-Notifier
-            Start-Sleep -Seconds 8  # Give notifier time to bind port before next loop
-        }
+        Write-Log "Notifier HTTP health ping failed. Force-restarting clean notifier instance..."
+        Stop-Notifier
+        Start-Notifier
+        Start-Sleep -Seconds 8  # Give notifier time to bind port before next loop
     }
 
     # ---- Network Check (only for git pull) ----

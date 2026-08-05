@@ -26,6 +26,7 @@ except AttributeError:
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.json")
 LOG_LOCK = threading.Lock()
+STOP_EVENT = threading.Event()
 _builtin_print = print
 
 def log_message(msg):
@@ -2804,47 +2805,52 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                     "message": f"Failed to fetch or parse data: {e}"
                 })
                 
-        elif path == '/trigger':
-            force = query_params.get("force", ["false"])[0].lower() == "true"
+        elif path in ['/trigger', '/force_start', '/reboot', '/force']:
             local_now = get_local_time(config)
-            business_date, active = get_business_date_and_active(
+            business_date, _ = get_business_date_and_active(
                 local_now,
                 config.get("monitoring_start_hour", 9),
                 config.get("monitoring_end_hour", 1)
             )
             
-            if not active and not force:
-                self.send_json_response(200, {
-                    "status": "skipped",
-                    "message": "Outside active monitoring hours. Notification skipped. Use ?force=true to override.",
-                    "business_date": business_date.strftime("%Y-%m-%d")
-                })
-                return
+            # Force-reset long-polling engine & state
+            global LONG_POLLING_ACTIVE, IS_STANDBY, ACTIVE_ENV, USER_CONVERSATION_STATE, LAST_LONG_POLL_TIME
+            LONG_POLLING_ACTIVE = False
+            IS_STANDBY = False
+            ACTIVE_ENV = "Local"
+            USER_CONVERSATION_STATE = None
+            save_conv_state()
+            LAST_LONG_POLL_TIME = time.time()
 
-            try:
-                stats = fetch_all_apis(business_date, config)
-                msg = format_telegram_message(stats, business_date, config)
-                ok, err = send_telegram_notification(msg, config)
-                if ok:
-                    check_and_send_pending_alert(business_date, config)
-                    self.send_json_response(200, {
-                        "status": "success",
-                        "message": "Notification triggered and sent successfully.",
-                        "business_date": business_date.strftime("%Y-%m-%d"),
-                        "stats": stats
-                    })
-                else:
-                    self.send_json_response(502, {
-                        "status": "error",
-                        "message": f"Failed to send Telegram notification: {err}",
-                        "business_date": business_date.strftime("%Y-%m-%d"),
-                        "stats": stats
-                    })
-            except Exception as e:
-                self.send_json_response(500, {
-                    "status": "error",
-                    "message": f"Trigger operation failed: {e}"
-                })
+            token = config.get("telegram_bot_token")
+            if token and "YOUR_TELEGRAM" not in token:
+                try:
+                    delete_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
+                    req = urllib.request.Request(delete_url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        resp.read()
+                except Exception as e:
+                    pass
+
+            def async_trigger_runner(b_date, cfg):
+                try:
+                    stats = fetch_all_apis(b_date, cfg)
+                    msg = format_telegram_message(stats, b_date, cfg)
+                    ok, err = send_telegram_notification(msg, cfg)
+                    if ok:
+                        check_and_send_pending_alert(b_date, cfg)
+                except Exception as thread_err:
+                    print(f"[{datetime.datetime.now()}] Error handling trigger request: {thread_err}")
+
+            threading.Thread(target=async_trigger_runner, args=(business_date, config), daemon=True).start()
+            threading.Thread(target=run_long_polling_loop, args=(STOP_EVENT,), daemon=True).start()
+
+            self.send_json_response(200, {
+                "status": "success",
+                "message": "Trigger received. Bot force-started and report running.",
+                "business_date": business_date.strftime("%Y-%m-%d")
+            })
+            return
         elif path == '/stop_render':
             api_key = config.get("RENDER_API_KEY") or os.environ.get("RENDER_API_KEY")
             service_id = config.get("RENDER_SERVICE_ID") or os.environ.get("RENDER_SERVICE_ID")
@@ -3578,13 +3584,14 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             send_telegram_notification(msg, config)
                             self.send_json_response(200, {"status": "ok", "message": msg})
                             return
-                        elif text in ["trigger", "/trigger", "\\trigger", "force_start", "/force_start", "\\force_start"]:
+                        elif text in ["trigger", "/trigger", "\\trigger", "!trigger", "force_start", "/force_start", "\\force_start", "!force_start", "reboot", "/reboot"] or any(kw in text for kw in ["/trigger", "\\trigger", "!trigger", "trigger"]):
                             print(f"[{datetime.datetime.now()}] Webhook received 'trigger' command from chat {chat_id}. Force-starting bot services...")
                             LONG_POLLING_ACTIVE = False
                             IS_STANDBY = False
                             ACTIVE_ENV = "Local"
                             USER_CONVERSATION_STATE = None
                             save_conv_state()
+                            LAST_LONG_POLL_TIME = time.time()
 
                             token = config.get("telegram_bot_token")
                             if token and "YOUR_TELEGRAM" not in token:
@@ -3619,6 +3626,12 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             threading.Thread(
                                 target=async_trigger_handler,
                                 args=(business_date, config),
+                                daemon=True
+                            ).start()
+
+                            threading.Thread(
+                                target=run_long_polling_loop,
+                                args=(STOP_EVENT,),
                                 daemon=True
                             ).start()
 
