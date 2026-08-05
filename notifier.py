@@ -161,6 +161,12 @@ def load_conv_state():
 PREFERRED_ENV = "Local"
 ACTIVE_ENV = "Local"
 BOTH_DEAD_ALERT_SENT = False
+
+def is_current_instance_active():
+    is_render = (os.environ.get("RENDER") is not None or os.environ.get("RENDER_SERVICE_ID") is not None)
+    if not is_render:
+        return True
+    return not IS_STANDBY
 LAST_API_POLL_SUCCESS = True
 CONFIG_ERROR = False
 
@@ -2458,8 +2464,8 @@ def run_long_polling_loop(stop_event):
     while not stop_event.is_set():
         try:
             LAST_LONG_POLL_TIME = time.time()
-            is_render = (os.environ.get("RENDER") is not None)
-            if is_render or ACTIVE_ENV == "Render":
+            is_render = (os.environ.get("RENDER") is not None or os.environ.get("RENDER_SERVICE_ID") is not None)
+            if is_render:
                 time.sleep(2)
                 continue
                 
