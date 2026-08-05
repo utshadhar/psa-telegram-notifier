@@ -15,6 +15,7 @@ import ssl
 
 # Globally set default socket timeout to 20s to prevent indefinite thread hangs on network calls
 socket.setdefaulttimeout(20.0)
+LAST_LONG_POLL_TIME = time.time()
 
 # Globally bypass SSL certificate verification for intranet/local environments
 try:
@@ -2446,7 +2447,7 @@ def handle_feature_trigger(handler, feat_key, config):
     start_feature_conversation(handler, feat_key, config)
 
 def run_long_polling_loop(stop_event):
-    global LONG_POLLING_ACTIVE, IS_STANDBY, ACTIVE_ENV
+    global LONG_POLLING_ACTIVE, IS_STANDBY, ACTIVE_ENV, LAST_LONG_POLL_TIME
     if LONG_POLLING_ACTIVE:
         return
     LONG_POLLING_ACTIVE = True
@@ -2455,6 +2456,7 @@ def run_long_polling_loop(stop_event):
     offset = 0
     while not stop_event.is_set():
         try:
+            LAST_LONG_POLL_TIME = time.time()
             is_render = (os.environ.get("RENDER") is not None)
             if is_render or ACTIVE_ENV == "Render":
                 time.sleep(2)
@@ -2466,10 +2468,10 @@ def run_long_polling_loop(stop_event):
                 time.sleep(5)
                 continue
                 
-            url = f"https://api.telegram.org/bot{token}/getUpdates?offset={offset}&timeout=20"
+            url = f"https://api.telegram.org/bot{token}/getUpdates?offset={offset}&timeout=10"
             try:
                 req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req, timeout=25) as resp:
+                with urllib.request.urlopen(req, timeout=15) as resp:
                     res = json.loads(resp.read().decode('utf-8'))
                     if res.get("ok"):
                         for update in res.get("result", []):
@@ -2482,6 +2484,7 @@ def run_long_polling_loop(stop_event):
         except Exception as outer_e:
             log_message(f"Long polling outer loop error (auto-recovering): {outer_e}")
             time.sleep(5)
+    LONG_POLLING_ACTIVE = False
 
 def takeover_failover_loop(stop_event):
     global PREFERRED_ENV, ACTIVE_ENV, IS_STANDBY, BOTH_DEAD_ALERT_SENT, LAST_API_POLL_SUCCESS, CONFIG_ERROR
@@ -3786,15 +3789,26 @@ def main():
             run_long_polling_loop(stop_event)
 
         def thread_watchdog(stop_event, threads_ref):
+            global LONG_POLLING_ACTIVE, LAST_LONG_POLL_TIME
             while not stop_event.is_set():
-                if stop_event.wait(60):
+                if stop_event.wait(15):
                     break
+                is_render = (os.environ.get("RENDER") is not None)
+                if not is_render and ACTIVE_ENV == "Local":
+                    elapsed = time.time() - LAST_LONG_POLL_TIME
+                    if elapsed > 35.0:
+                        log_message(f"⚠️ Long Polling thread stalled ({elapsed:.1f}s > 35s). Resetting & restarting Long Polling thread...")
+                        LONG_POLLING_ACTIVE = False
+                        lp_t = threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")
+                        lp_t.start()
+                        threads_ref[3] = ["LongPollingThread", lp_t, lambda: threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")]
+
                 for i, (name, t, factory) in enumerate(threads_ref):
                     if not t.is_alive():
                         log_message(f"Thread '{name}' died unexpectedly. Restarting...")
                         new_t = factory()
                         new_t.start()
-                        threads_ref[i] = (name, new_t, factory)
+                        threads_ref[i] = [name, new_t, factory]
 
         lp_thread_ref_list = [["LongPollingThread", lp_thread, lambda: threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")]]
         threads_to_watch = [
