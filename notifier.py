@@ -2970,8 +2970,10 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                         chat = message.get("chat")
                         chat_id = str(chat.get("id")) if chat else ""
                         text = str(message.get("text") or "").strip().lower()
+                        import re
+                        text = re.sub(r'@[a-zA-Z0-9_]+', '', text).strip()
                     
-                    print(f"[{datetime.datetime.now()}] Webhook received text='{text}' in state='{USER_CONVERSATION_STATE}' from chat_id={chat_id}")
+                    log_message(f"Webhook received text='{text}' in state='{USER_CONVERSATION_STATE}' from chat_id={chat_id}")
                     expected_chat_id = str(config.get("telegram_chat_id", "")).strip()
                     is_trigger_cmd = any(kw in text for kw in ["trigger", "start", "feature", "status", "report", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9"])
                     
