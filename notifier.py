@@ -16,6 +16,7 @@ import ssl
 # Globally set default socket timeout to 20s to prevent indefinite thread hangs on network calls
 socket.setdefaulttimeout(20.0)
 LAST_LONG_POLL_TIME = time.time()
+LAST_TELEGRAM_OFFSET = 0
 
 # Globally bypass SSL certificate verification for intranet/local environments
 try:
@@ -2454,13 +2455,12 @@ def handle_feature_trigger(handler, feat_key, config):
     start_feature_conversation(handler, feat_key, config)
 
 def run_long_polling_loop(stop_event):
-    global LONG_POLLING_ACTIVE, IS_STANDBY, ACTIVE_ENV, LAST_LONG_POLL_TIME
+    global LONG_POLLING_ACTIVE, IS_STANDBY, ACTIVE_ENV, LAST_LONG_POLL_TIME, LAST_TELEGRAM_OFFSET
     if LONG_POLLING_ACTIVE:
         return
     LONG_POLLING_ACTIVE = True
     log_message("Telegram Long Polling thread started.")
     
-    offset = 0
     while not stop_event.is_set():
         try:
             LAST_LONG_POLL_TIME = time.time()
@@ -2475,17 +2475,22 @@ def run_long_polling_loop(stop_event):
                 time.sleep(5)
                 continue
                 
-            url = f"https://api.telegram.org/bot{token}/getUpdates?offset={offset}&timeout=10"
+            url = f"https://api.telegram.org/bot{token}/getUpdates?offset={LAST_TELEGRAM_OFFSET}&timeout=10"
             try:
                 req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
                 with urllib.request.urlopen(req, timeout=15) as resp:
                     res = json.loads(resp.read().decode('utf-8'))
                     if res.get("ok"):
                         for update in res.get("result", []):
-                            offset = update.get("update_id", 0) + 1
+                            up_id = update.get("update_id", 0)
+                            if up_id >= LAST_TELEGRAM_OFFSET:
+                                LAST_TELEGRAM_OFFSET = up_id + 1
                             message = update.get("message") or update.get("edited_message") or update.get("callback_query")
                             if message:
                                 process_long_poll_update(update, config)
+                    elif res.get("error_code") == 409:
+                        log_message("Telegram 409 Conflict detected. Waiting 5s for stale connections to clear...")
+                        time.sleep(5)
             except Exception as e:
                 time.sleep(2)
         except Exception as outer_e:
@@ -2849,7 +2854,6 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                     print(f"[{datetime.datetime.now()}] Error handling trigger request: {thread_err}")
 
             threading.Thread(target=async_trigger_runner, args=(business_date, config), daemon=True).start()
-            threading.Thread(target=run_long_polling_loop, args=(STOP_EVENT,), daemon=True).start()
 
             self.send_json_response(200, {
                 "status": "success",
@@ -3642,12 +3646,6 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             threading.Thread(
                                 target=async_trigger_handler,
                                 args=(business_date, config),
-                                daemon=True
-                            ).start()
-
-                            threading.Thread(
-                                target=run_long_polling_loop,
-                                args=(STOP_EVENT,),
                                 daemon=True
                             ).start()
 
