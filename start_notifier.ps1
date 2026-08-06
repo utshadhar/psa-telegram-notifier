@@ -52,15 +52,23 @@ function Stop-Notifier {
 
 function Start-Notifier {
     try {
-        $PythonExe = "C:\Program Files\Python311\python.exe"
+        $PythonExe = "C:\Program Files\Python311\pythonw.exe"
         if (-not (Test-Path $PythonExe)) {
-            $PythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
+            $PythonExe = "C:\Program Files\Python311\python.exe"
+        }
+        if (-not (Test-Path $PythonExe)) {
+            $PythonExe = (Get-Command pythonw -ErrorAction SilentlyContinue).Source
         }
         if (-not $PythonExe) {
-            $PythonExe = "python"
+            $PythonExe = "pythonw"
         }
-        Start-Process -FilePath $PythonExe -ArgumentList $NotifierScript -WindowStyle Hidden -WorkingDirectory $ScriptDir
-        Write-Log "Notifier process started successfully."
+
+        $CommandLine = "`"$PythonExe`" `"$NotifierScript`""
+        Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+            CommandLine = $CommandLine
+            CurrentDirectory = $ScriptDir
+        } | Out-Null
+        Write-Log "Notifier windowless background process started successfully."
     }
     catch {
         Write-Log "Failed to start notifier process: $_"
