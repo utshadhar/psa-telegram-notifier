@@ -2228,13 +2228,9 @@ def check_local_health(config):
         print(f"[{datetime.datetime.now()}] Local health check: FAILED - Heartbeat timeout (last seen {elapsed:.1f}s ago)")
         return False, f"Heartbeat timeout (last seen {elapsed:.1f}s ago)"
 
-def is_current_instance_active():
-    global ACTIVE_ENV
-    is_render = (os.environ.get("RENDER") is not None)
-    if is_render:
-        return ACTIVE_ENV == "Render"
-    else:
-        return ACTIVE_ENV == "Local"
+# is_current_instance_active is defined at line 166 (Local always returns True).
+# DO NOT redefine it here — the duplicate caused midnight freezes by returning False
+# when takeover_failover_loop flipped ACTIVE_ENV to "Render".
 
 def handle_pending_threshold_update(handler, var_name, val, clear_args, config):
     global USER_CONVERSATION_STATE, PENDING_CONFIG_UPDATE
@@ -2560,66 +2556,11 @@ def takeover_failover_loop(stop_event):
                     log_message(msg)
                     send_telegram_notification(msg, config)
         else:
-            # We are Local, target is Render
-            alive, reason = check_render_health(config)
-            if alive:
-                RENDER_CONSECUTIVE_SUCCESS += 1
-                RENDER_CONSECUTIVE_FAILURE = 0
-            else:
-                RENDER_CONSECUTIVE_FAILURE += 1
-                RENDER_CONSECUTIVE_SUCCESS = 0
-                
-            if PREFERRED_ENV == "Render":
-                if RENDER_CONSECUTIVE_FAILURE >= 3 and ACTIVE_ENV == "Render":
-                    ACTIVE_ENV = "Local"
-                    IS_STANDBY = False
-                    token = config.get("telegram_bot_token")
-                    if token:
-                        delete_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
-                        try:
-                            req = urllib.request.Request(delete_url, headers={"User-Agent": "Mozilla/5.0"})
-                            with urllib.request.urlopen(req, timeout=3) as resp:
-                                pass
-                        except Exception as e:
-                            log_message(f"Failed to delete webhook: {e}")
-                    msg = "⚠️ Render Notifier is offline (3 consecutive timeout checks). Local has automatically taken over monitoring."
-                    log_message(msg)
-                    send_telegram_notification(msg, config)
-                elif RENDER_CONSECUTIVE_SUCCESS >= 3 and ACTIVE_ENV == "Local":
-                    ACTIVE_ENV = "Render"
-                    IS_STANDBY = True
-                    render_url = os.environ.get("RENDER_EXTERNAL_URL") or config.get("render_external_url")
-                    if render_url:
-                        threading.Thread(target=register_webhook, args=(render_url, config), daemon=True).start()
-                    msg = "✅ Render Notifier has recovered (3 consecutive successful checks). Local has automatically yielded monitoring back to Render."
-                    log_message(msg)
-                    send_telegram_notification(msg, config)
-            elif PREFERRED_ENV == "Local":
-                if ACTIVE_ENV == "Render":
-                    ACTIVE_ENV = "Local"
-                    IS_STANDBY = False
-                    token = config.get("telegram_bot_token")
-                    if token:
-                        delete_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
-                        try:
-                            req = urllib.request.Request(delete_url, headers={"User-Agent": "Mozilla/5.0"})
-                            with urllib.request.urlopen(req, timeout=3) as resp:
-                                pass
-                        except Exception as e:
-                            log_message(f"Failed to delete webhook: {e}")
-                    msg = "🔄 Local is now the active monitoring environment."
-                    log_message(msg)
-                    send_telegram_notification(msg, config)
-
-        # Silence Rule: check if both environments are dead
-        if not alive and not LAST_API_POLL_SUCCESS:
-            if not BOTH_DEAD_ALERT_SENT:
-                BOTH_DEAD_ALERT_SENT = True
-                msg = "🚨 CRITICAL: Both Render and Local environments are currently unavailable/failing!"
-                log_message(msg)
-                send_telegram_notification(msg, config)
-        else:
-            BOTH_DEAD_ALERT_SENT = False
+            # We are Local — NEVER change ACTIVE_ENV away from "Local".
+            # The failover logic previously flipped ACTIVE_ENV to "Render" even on Local,
+            # which caused is_current_instance_active() to return False and froze all threads.
+            ACTIVE_ENV = "Local"
+            IS_STANDBY = False
 
 def local_heartbeat_ping_loop(stop_event):
     log_message("Local heartbeat ping loop started.")
@@ -3823,7 +3764,7 @@ def main():
                 if stop_event.wait(15):
                     break
                 is_render = (os.environ.get("RENDER") is not None)
-                if not is_render and ACTIVE_ENV == "Local":
+                if not is_render:
                     elapsed = time.time() - LAST_LONG_POLL_TIME
                     if elapsed > 35.0:
                         log_message(f"⚠️ Long Polling thread stalled ({elapsed:.1f}s > 35s). Resetting & restarting Long Polling thread...")
