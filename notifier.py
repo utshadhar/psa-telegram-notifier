@@ -17,6 +17,7 @@ import ssl
 socket.setdefaulttimeout(20.0)
 LAST_LONG_POLL_TIME = time.time()
 LAST_TELEGRAM_OFFSET = 0
+CURRENT_LONG_POLL_RESPONSE = None
 
 # Globally bypass SSL certificate verification for intranet/local environments
 try:
@@ -2451,7 +2452,7 @@ def handle_feature_trigger(handler, feat_key, config):
     start_feature_conversation(handler, feat_key, config)
 
 def run_long_polling_loop(stop_event):
-    global LONG_POLLING_ACTIVE, IS_STANDBY, ACTIVE_ENV, LAST_LONG_POLL_TIME, LAST_TELEGRAM_OFFSET
+    global LONG_POLLING_ACTIVE, IS_STANDBY, ACTIVE_ENV, LAST_LONG_POLL_TIME, LAST_TELEGRAM_OFFSET, CURRENT_LONG_POLL_RESPONSE
     if LONG_POLLING_ACTIVE:
         return
     LONG_POLLING_ACTIVE = True
@@ -2473,9 +2474,11 @@ def run_long_polling_loop(stop_event):
                 
             url = f"https://api.telegram.org/bot{token}/getUpdates?offset={LAST_TELEGRAM_OFFSET}&timeout=10"
             try:
-                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Connection": "close"})
                 with urllib.request.urlopen(req, timeout=15) as resp:
+                    CURRENT_LONG_POLL_RESPONSE = resp
                     res = json.loads(resp.read().decode('utf-8'))
+                    CURRENT_LONG_POLL_RESPONSE = None
                     if res.get("ok"):
                         for update in res.get("result", []):
                             up_id = update.get("update_id", 0)
@@ -2488,8 +2491,10 @@ def run_long_polling_loop(stop_event):
                         log_message("Telegram 409 Conflict detected. Waiting 5s for stale connections to clear...")
                         time.sleep(5)
             except Exception as e:
+                CURRENT_LONG_POLL_RESPONSE = None
                 time.sleep(2)
         except Exception as outer_e:
+            CURRENT_LONG_POLL_RESPONSE = None
             log_message(f"Long polling outer loop error (auto-recovering): {outer_e}")
             time.sleep(5)
     LONG_POLLING_ACTIVE = False
@@ -3759,7 +3764,7 @@ def main():
             run_long_polling_loop(stop_event)
 
         def thread_watchdog(stop_event, threads_ref):
-            global LONG_POLLING_ACTIVE, LAST_LONG_POLL_TIME
+            global LONG_POLLING_ACTIVE, LAST_LONG_POLL_TIME, CURRENT_LONG_POLL_RESPONSE
             while not stop_event.is_set():
                 if stop_event.wait(15):
                     break
@@ -3767,7 +3772,13 @@ def main():
                 if not is_render:
                     elapsed = time.time() - LAST_LONG_POLL_TIME
                     if elapsed > 35.0:
-                        log_message(f"⚠️ Long Polling thread stalled ({elapsed:.1f}s > 35s). Resetting & restarting Long Polling thread...")
+                        log_message(f"⚠️ Long Polling thread stalled ({elapsed:.1f}s > 35s). Closing frozen socket & restarting Long Polling thread...")
+                        try:
+                            if CURRENT_LONG_POLL_RESPONSE:
+                                CURRENT_LONG_POLL_RESPONSE.close()
+                        except Exception:
+                            pass
+                        CURRENT_LONG_POLL_RESPONSE = None
                         LONG_POLLING_ACTIVE = False
                         lp_t = threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")
                         lp_t.start()
