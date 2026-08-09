@@ -2946,10 +2946,24 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                         import re
                         
                         # Conversational state handling
-                        if USER_CONVERSATION_STATE and text.startswith("/"):
-                            log_message(f"User sent command '{text}' while in state '{USER_CONVERSATION_STATE}'. Cancelling previous state.")
-                            USER_CONVERSATION_STATE = None
-                            save_conv_state()
+                        if USER_CONVERSATION_STATE:
+                            if text in ["/cancel", "cancel"]:
+                                log_message(f"User cancelled conversation state '{USER_CONVERSATION_STATE}'.")
+                                USER_CONVERSATION_STATE = None
+                                save_conv_state()
+                                send_telegram_notification("Conversation cancelled.", config)
+                                self.send_json_response(200, {"status": "ok", "message": "Conversation cancelled."})
+                                return
+
+                            # Strip leading slash if user selected an option or typed a number like /default, /15, /yes, /1
+                            if text.startswith("/"):
+                                clean_opt = text[1:].strip()
+                                if clean_opt in ["default", "current", "none", "yes", "no", "y", "n", "1", "2", "3"] or clean_opt.isdigit():
+                                    text = clean_opt
+                                else:
+                                    log_message(f"User sent command '{text}' while in state '{USER_CONVERSATION_STATE}'. Cancelling previous state.")
+                                    USER_CONVERSATION_STATE = None
+                                    save_conv_state()
 
                         if USER_CONVERSATION_STATE:
                             # 1. SELECT_MODE_FEAT
