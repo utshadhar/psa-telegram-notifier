@@ -2193,9 +2193,18 @@ def process_long_poll_update(update, config):
                     LAST_PROCESSED_ACTION["time"] = now_ts
 
         mock_handler = MockHandler(update)
-        RequestHandler.do_POST(mock_handler)
+        # Run do_POST in a daemon thread so the long polling loop is NEVER blocked.
+        # Previously this was synchronous which caused the entire polling loop to freeze
+        # whenever do_POST made network calls (deleteWebhook, fetch_all_apis, etc.).
+        threading.Thread(target=_safe_do_post, args=(mock_handler,), daemon=True).start()
     except Exception as e:
         log_message(f"Error processing long polling update: {e}")
+
+def _safe_do_post(mock_handler):
+    try:
+        RequestHandler.do_POST(mock_handler)
+    except Exception as e:
+        log_message(f"Error in background do_POST handler: {e}")
 
 def check_render_health(config):
     render_url = os.environ.get("RENDER_EXTERNAL_URL") or config.get("render_external_url")
@@ -2779,25 +2788,25 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             save_conv_state()
             LAST_LONG_POLL_TIME = time.time()
 
-            token = config.get("telegram_bot_token")
-            if token and "YOUR_TELEGRAM" not in token:
-                try:
-                    delete_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
-                    req = urllib.request.Request(delete_url, headers={"User-Agent": "Mozilla/5.0"})
-                    with urllib.request.urlopen(req, timeout=5) as resp:
-                        resp.read()
-                except Exception as e:
-                    pass
-
             def async_trigger_runner(b_date, cfg):
                 try:
+                    # Delete webhook first (non-blocking, inside thread)
+                    tok = cfg.get("telegram_bot_token")
+                    if tok and "YOUR_TELEGRAM" not in tok:
+                        try:
+                            delete_url = f"https://api.telegram.org/bot{tok}/deleteWebhook"
+                            req = urllib.request.Request(delete_url, headers={"User-Agent": "Mozilla/5.0"})
+                            with urllib.request.urlopen(req, timeout=5) as resp:
+                                resp.read()
+                        except Exception:
+                            pass
                     stats = fetch_all_apis(b_date, cfg)
                     msg = format_telegram_message(stats, b_date, cfg)
                     ok, err = send_telegram_notification(msg, cfg)
                     if ok:
                         check_and_send_pending_alert(b_date, cfg)
                 except Exception as thread_err:
-                    print(f"[{datetime.datetime.now()}] Error handling trigger request: {thread_err}")
+                    log_message(f"Error handling trigger request in background: {thread_err}")
 
             threading.Thread(target=async_trigger_runner, args=(business_date, config), daemon=True).start()
 

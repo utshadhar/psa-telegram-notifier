@@ -2,6 +2,7 @@ import unittest
 import datetime
 import json
 import threading
+import time
 from unittest.mock import patch, MagicMock
 
 # Add target directory to sys.path to import notifier
@@ -1161,6 +1162,7 @@ class TestPSATelegramNotifier(unittest.TestCase):
             mock_load_config.return_value = config
             mock_send.return_value = (True, None)
             notifier.process_long_poll_update(update, config)
+            time.sleep(0.2)  # Allow daemon thread from process_long_poll_update to complete
             self.assertEqual(notifier.PSA_SO_PENDING_THRESHOLD_MINUTES, 0)
             mock_send.assert_called_with("psa_so_pending_threshold_minutes checker is off.", config)
             
@@ -1176,6 +1178,7 @@ class TestPSATelegramNotifier(unittest.TestCase):
             mock_load_config.return_value = config
             mock_send.return_value = (True, None)
             notifier.process_long_poll_update(update, config)
+            time.sleep(0.2)  # Allow daemon thread from process_long_poll_update to complete
             mock_send.assert_called_with("State switching is disabled. Render runs webhook only and Local runs long polling only.", config)
 
     def test_callmebot_target_validation(self):
