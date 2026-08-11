@@ -1,14 +1,15 @@
 @echo off
 :: PSA Telegram Notifier - Hard Restart Script
-:: Kills ALL pythonw.exe instances running notifier.py, then starts fresh.
-:: Runs every day at 00:03 via Windows Task Scheduler.
+:: Kills ALL python/pythonw processes and restarts notifier.py fresh.
+:: Runs every day at 00:15 via Windows Task Scheduler.
 
-echo [%DATE% %TIME%] Stopping all notifier processes...
+echo [%DATE% %TIME%] Stopping ALL python processes (including zombies)...
 
-:: Kill any pythonw.exe running notifier.py (force kill)
+:: Kill all python/pythonw processes including SYSTEM-owned zombies
+taskkill /f /im python.exe >nul 2>&1
 taskkill /f /im pythonw.exe >nul 2>&1
 
-:: Wait 3 seconds for processes to fully terminate
+:: Wait 3 seconds for all sockets to release (TIME_WAIT, CLOSE_WAIT)
 timeout /t 3 /nobreak >nul
 
 echo [%DATE% %TIME%] Starting fresh notifier process...

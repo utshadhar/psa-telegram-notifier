@@ -13,6 +13,13 @@ import concurrent.futures
 import socket
 import ssl
 
+# Fix for pythonw.exe: stdout/stderr are None which causes silent crashes in HTTP handler threads.
+# Any print() call inside a request handler crashes the thread if sys.stdout is None.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w')
+
 # Globally set default socket timeout to 30s to prevent indefinite thread hangs on network calls
 socket.setdefaulttimeout(30.0)
 LAST_LONG_POLL_TIME = time.time()
@@ -2606,11 +2613,14 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             content = json.dumps(data).encode('utf-8')
             self.send_response(status_code)
             self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(content)))
+            self.send_header('Connection', 'close')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
             self.send_header('Access-Control-Allow-Headers', 'Content-Type')
             self.end_headers()
             self.wfile.write(content)
+            self.wfile.flush()
         except Exception as e:
             print(f"[{datetime.datetime.now()}] Error writing response: {e}")
 
@@ -2622,6 +2632,16 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        try:
+            self._do_GET_inner()
+        except Exception as outer_err:
+            print(f"[{datetime.datetime.now()}] CRITICAL do_GET error: {outer_err}")
+            try:
+                self.send_json_response(500, {"error": str(outer_err)})
+            except Exception:
+                pass
+
+    def _do_GET_inner(self):
         config = load_config()
         parsed_url = urlparse(self.path)
         path = parsed_url.path
