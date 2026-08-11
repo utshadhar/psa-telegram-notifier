@@ -13,8 +13,8 @@ import concurrent.futures
 import socket
 import ssl
 
-# Globally set default socket timeout to 20s to prevent indefinite thread hangs on network calls
-socket.setdefaulttimeout(20.0)
+# Globally set default socket timeout to 30s to prevent indefinite thread hangs on network calls
+socket.setdefaulttimeout(30.0)
 LAST_LONG_POLL_TIME = time.time()
 LAST_TELEGRAM_OFFSET = 0
 CURRENT_LONG_POLL_RESPONSE = None
@@ -3719,6 +3719,13 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     """Multi-threaded HTTP Server using socketserver.ThreadingMixIn."""
     daemon_threads = True
     allow_reuse_address = True
+
+    def get_request(self):
+        """Override to set a 30s timeout on each accepted connection socket.
+        This prevents wfile.write() hangs when the client disconnects unexpectedly."""
+        request, client_address = self.socket.accept()
+        request.settimeout(30.0)
+        return request, client_address
 
 def main():
     """Entry point — boots Render (webhook) or Local (long polling) mode automatically."""
