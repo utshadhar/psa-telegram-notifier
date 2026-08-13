@@ -18,6 +18,7 @@ if %HEALTH%==0 (
 )
 
 echo [%DATE% %TIME%] WATCHDOG: Bot health FAILED (code=%HEALTH%). Force restarting... >> "%LOG%"
+taskkill /f /im python.exe >nul 2>&1
 taskkill /f /im pythonw.exe >nul 2>&1
 timeout /t 2 /nobreak >nul
 start "" "C:\Program Files\Python311\pythonw.exe" "C:\Users\admin\.gemini\antigravity-ide\scratch\psa-telegram-notifier\notifier.py"
