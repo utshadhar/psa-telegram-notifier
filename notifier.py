@@ -1369,6 +1369,25 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
         "total_pending_co": total_co
     }
 
+def fetch_url_data(req, timeout=12):
+    """
+    Executes an HTTP Request with a strict read timeout to prevent
+    response.read() from hanging indefinitely during server DB maintenance.
+    """
+    try:
+        old_timeout = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(float(timeout))
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            try:
+                if hasattr(response, 'fp') and hasattr(response.fp, 'raw') and hasattr(response.fp.raw, '_sock'):
+                    response.fp.raw._sock.settimeout(float(timeout))
+            except Exception:
+                pass
+            raw_bytes = response.read()
+            return raw_bytes.decode('utf-8')
+    finally:
+        socket.setdefaulttimeout(30.0)
+
 def fetch_and_parse(business_date, api_config, config=None):
     """Fetches raw data from a specific API template and parses pending stats."""
     template = api_config.get("url_template", "")
@@ -1404,16 +1423,15 @@ def fetch_and_parse(business_date, api_config, config=None):
         headers=headers
     )
     
-    with urllib.request.urlopen(req, timeout=15) as response:
-        raw_data = response.read().decode('utf-8')
-        data = json.loads(raw_data)
-        return parse_psa_data(
-            data,
-            filter_pending=api_config.get("filter_pending", True),
-            default_process=api_config.get("default_process"),
-            api_name=api_config.get("name"),
-            config=config
-        )
+    raw_data = fetch_url_data(req, timeout=12)
+    data = json.loads(raw_data)
+    return parse_psa_data(
+        data,
+        filter_pending=api_config.get("filter_pending", True),
+        default_process=api_config.get("default_process"),
+        api_name=api_config.get("name"),
+        config=config
+    )
 
 def fetch_cv_sorting_data(config):
     """Fetches CV Sorting task statistics from private development API and groups by status."""
@@ -1428,14 +1446,11 @@ def fetch_cv_sorting_data(config):
         headers["Cookie"] = cookie
 
     req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=15) as response:
-        raw_data = response.read().decode('utf-8')
-        res_json = json.loads(raw_data)
+    raw_data = fetch_url_data(req, timeout=12)
+    res_json = json.loads(raw_data)
         
     data = res_json.get("data", [])
     
-    # We want task_no values grouped by status
-    # Focused statuses: pending, downloading, downloaded, notfound, screening
     stats = {
         "pending": [],
         "downloading": [],
@@ -1450,10 +1465,8 @@ def fetch_cv_sorting_data(config):
         status = str(item.get("status") or "").strip().lower()
         task_no = str(item.get("task_no") or "").strip()
         if task_no and status in stats:
-            # Capitalize task number as requested by user (e.g. TASK3 -> Task3)
             stats[status].append(task_no.capitalize())
             
-    # Sort task lists for clean presentation
     for status in stats:
         stats[status].sort()
         
@@ -1472,12 +1485,12 @@ def fetch_rpa_config_data(config):
         headers["Cookie"] = cookie
 
     req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=15) as response:
-        raw_data = response.read().decode('utf-8')
-        res_json = json.loads(raw_data)
+    raw_data = fetch_url_data(req, timeout=12)
+    res_json = json.loads(raw_data)
         
     profile_count = str(res_json.get("PROFILECOUNT") or "0").strip()
     return {"profile_count": profile_count}
+
 
 def fetch_all_apis(business_date, config):
     """Fetches and aggregates pending stats from all configured API templates in parallel."""
