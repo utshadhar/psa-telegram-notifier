@@ -26,11 +26,15 @@ LAST_LONG_POLL_TIME = time.time()
 LAST_TELEGRAM_OFFSET = 0
 CURRENT_LONG_POLL_RESPONSE = None
 
-# Globally bypass SSL certificate verification for intranet/local environments
+# Single-instance socket lock to prevent multiple python processes from running simultaneously
+SINGLE_INSTANCE_PORT = 8089
 try:
-    ssl._create_default_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
+    _single_instance_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    _single_instance_socket.bind(('127.0.0.1', SINGLE_INSTANCE_PORT))
+    _single_instance_socket.listen(1)
+except OSError:
+    # Another instance of notifier.py is already running. Exit silently.
+    sys.exit(0)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.json")
