@@ -3823,6 +3823,17 @@ def main():
         lp_thread = threading.Thread(target=run_long_polling_loop, args=(stop_event,), daemon=True, name="LongPollingThread")
         lp_thread.start()
 
+        # Send Telegram startup notification on boot/restart
+        def send_startup_alert(cfg):
+            try:
+                now_str = get_local_time(cfg).strftime("%Y-%m-%d %H:%M:%S")
+                boot_msg = f"🔄 *PSA Telegram Notifier Restarted*\n\nBot services online at `{now_str}` (Local).\nMonitoring & auto-healing active."
+                send_telegram_notification(boot_msg, cfg)
+            except Exception as e:
+                print(f"[{datetime.datetime.now()}] Failed to send startup alert: {e}")
+
+        threading.Thread(target=send_startup_alert, args=(config,), daemon=True).start()
+
         # Internal thread watchdog: monitors all background threads and restarts them if they die
         def run_long_polling_loop_restart(stop_event):
             """Wrapper that resets LONG_POLLING_ACTIVE so the thread can be restarted."""
