@@ -1612,7 +1612,7 @@ def fetch_all_apis(business_date, config):
                     if err:
                         print(f"[{datetime.datetime.now()}] Error fetching from {name}: {err}")
                     else:
-                        results[name] = stats
+                        results[name] = stats if stats is not None else {}
                 except Exception as fe:
                     print(f"[{datetime.datetime.now()}] Future execution error: {fe}")
         except concurrent.futures.TimeoutError:
@@ -1867,7 +1867,7 @@ def format_telegram_message(stats, business_date, config):
     for name, api_config in apis_to_process:
         if name.startswith("_"):
             continue
-        api_stats = stats[name]
+        api_stats = stats.get(name) or {}
         
         # Determine display_name based on name (case-insensitive checks)
         name_lower = name.lower()
@@ -3800,10 +3800,9 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     ok, err = send_telegram_notification(msg, cfg)
                                     if ok:
                                         check_and_send_pending_alert(b_date, cfg)
-                                except Exception as thread_err:
+                                except Exception:
                                     import traceback
-                                    traceback.print_exc()
-                                    print(f"[{datetime.datetime.now()}] Error handling trigger request in background: {thread_err}")
+                                    log_message(f"Error handling trigger request in background: {traceback.format_exc()}")
 
                             threading.Thread(
                                 target=async_trigger_handler,
@@ -3833,11 +3832,10 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         LAST_WEBHOOK_ERROR = f"Failed to send Telegram notification: {err}"
                                     else:
                                         check_and_send_pending_alert(b_date, cfg)
-                                except Exception as thread_err:
+                                except Exception:
                                     import traceback
-                                    traceback.print_exc()
-                                    LAST_WEBHOOK_ERROR = f"Thread Exception: {str(thread_err)}"
-                                    print(f"[{datetime.datetime.now()}] Error handling webhook request in background: {thread_err}")
+                                    LAST_WEBHOOK_ERROR = f"Thread Exception: {traceback.format_exc()}"
+                                    log_message(f"Error handling webhook request in background: {traceback.format_exc()}")
                             
                             threading.Thread(
                                 target=async_webhook_handler,
