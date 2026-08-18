@@ -1,0 +1,14 @@
+
+=========================================
+API: PSA
+Raw dict SO count: 128, CO count: 8
+Sample SO item: {"process": "SO", "do_number": "O033182-2026-00533", "Line_Id": 3542034, "TransactionId": "5266121300A", "date_time": "2026-08-18", "acc_approved_date_time": "2026-08-18 17:36:21", "order_type": "ZFSO", "Sales_Org": "3010", "Destination_Channel": 10, "Division": "A", "Sold_To_Party": "1012708", "Mat
+Sample CO item: {"process": "CO", "pay_id": 556312, "order_payment_id": 667273, "payment_number": "C000817-2026-01253", "receiving_company_code": "5100", "customerName": "Shakil Confectionery(Rupganj-A)", "customer_code": "1000073", "bankName": "Dutch Bangla Bank Ltd.", "bankBranchName": "NARAYANGANJ", "routing_cod
+
+=========================================
+API: API_3 (OBD)
+Raw dict SO count: 0, CO count: 0
+
+=========================================
+API: API_4 (Contract)
+Raw dict SO count: 0, CO count: 0

@@ -1292,10 +1292,10 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
                     return True
         return False
 
-def get_unique_id(item, keys):
-    if isinstance(keys, str) and keys in ["API_6", "FreshCeramics_Pending_Orders", "ceramics", "mcil", "freshceramics"]:
-        uid = ceramics_handler.get_ceramics_so_unique_id(item) or ceramics_handler.get_ceramics_co_unique_id(item)
-        if uid: return uid
+    def get_unique_id(item, keys):
+        if isinstance(keys, str) and keys in ["API_6", "FreshCeramics_Pending_Orders", "ceramics", "mcil", "freshceramics"]:
+            uid = ceramics_handler.get_ceramics_so_unique_id(item) or ceramics_handler.get_ceramics_co_unique_id(item)
+            if uid: return uid
 
         for key in keys:
             if key in item:

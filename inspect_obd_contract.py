@@ -1,0 +1,36 @@
+import urllib.request, json
+
+apis = [
+    ("API_3 (OBD)", "https://smartsales.mgi.org/api/delivery-program-to-all-incoterm?product_line=0&env=1&plan_id=-&order_no=-&delivery_plan_no=-&plant_code=1201%2C%201222%2C%201223%2C%201224%2C%201225%2C%201226%2C%201227%2C%201228%2C%201229%2C%201230%2C%201231%2C%201233%2C%201234%2C%201235%2C%201236%2C%201237%2C%201238%2C%201239%2C%201241%2C%201243%2C%201244%2C%201245%2C%201246%2C%201247%2C%201248%2C%201249%2C%201250%2C%201251%2C1253%2C1255%2C1256&inco_term=0&server_allocation=0&start_date=2026-08-01&end_date=2026-08-18", {"app-key": "AnF3XAy79fvJvgksKzE0waBh8otfNlXE6htzYxuk"}),
+    ("API_4 (Contract)", "https://psa.mgi.org/api/getCorpAllData/2026-08-01/2026-08-18/8?server=0", {})
+]
+
+out = []
+for name, url, headers in apis:
+    headers["User-Agent"] = "Mozilla/5.0"
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            raw = resp.read().decode("utf-8")
+            data = json.loads(raw)
+            if isinstance(data, dict) and "data" in data and isinstance(data["data"], (dict, list)):
+                data = data["data"]
+            
+            out.append(f"\nAPI: {name}")
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    out.append(f"  Key '{k}': {len(v) if isinstance(v, list) else type(v)}")
+                    if isinstance(v, list) and v:
+                        out.append(f"  Sample {k} item: {json.dumps(v[0], indent=2)[:400]}")
+            elif isinstance(data, list):
+                out.append(f"  List count: {len(data)}")
+                if data:
+                    out.append(f"  Sample item: {json.dumps(data[0], indent=2)[:400]}")
+    except Exception as e:
+        out.append(f"ERROR {name}: {e}")
+
+out_path = r"C:\Users\admin\.gemini\antigravity-ide\scratch\psa-telegram-notifier\inspect_obd_contract.txt"
+with open(out_path, "w", encoding="utf-8") as f:
+    f.write("\n".join(out))
+
+print("Saved inspection output to:", out_path)
