@@ -1625,8 +1625,8 @@ def _send_single_telegram_msg(message, token, chat_id, reply_markup=None):
         payload["reply_markup"] = {
             "keyboard": [
                 [{"text": "/feature"}, {"text": "/status"}, {"text": "/report"}],
-                [{"text": "/f1"}, {"text": "/f2"}, {"text": "/f3"}, {"text": "/f4"}, {"text": "/f5"}, {"text": "/f6"}, {"text": "/f7"}, {"text": "/f8"}, {"text": "/f9"}],
-                [{"text": "/o1"}, {"text": "/o2"}, {"text": "/o3"}, {"text": "/o4"}, {"text": "/o5"}, {"text": "/o6"}, {"text": "/o7"}, {"text": "/o8"}, {"text": "/o9"}]
+                [{"text": "/f1"}, {"text": "/f2"}, {"text": "/f3"}, {"text": "/f4"}, {"text": "/f5"}, {"text": "/f6"}, {"text": "/f7"}, {"text": "/f8"}, {"text": "/f9"}, {"text": "/f10"}, {"text": "/f11"}],
+                [{"text": "/o1"}, {"text": "/o2"}, {"text": "/o3"}, {"text": "/o4"}, {"text": "/o5"}, {"text": "/o6"}, {"text": "/o7"}, {"text": "/o8"}, {"text": "/o9"}, {"text": "/o10"}, {"text": "/o11"}]
             ],
             "resize_keyboard": True,
             "is_persistent": True
@@ -1874,6 +1874,8 @@ def format_telegram_message(stats, business_date, config):
             display_name = "SmartSales OBD Pending"
         elif name_lower in ("api_4", "sap_contract_create", "sap_contract_pending", "sap contract pending", "sap_contract"):
             display_name = "SAP Contract Pending"
+        elif name_lower in ("api_6", "freshceramics_pending_orders", "freshceramics pending orders", "freshceramics", "ceramics", "mcil"):
+            display_name = "Fresh Ceramics Pending Orders"
         else:
             display_name = name.replace("_", " ")
         
@@ -2034,13 +2036,17 @@ def register_bot_commands(config):
         {"command": "f8_end", "description": "Set end hour for f8 window"},
         {"command": "o8", "description": "Turn off FreshLPG SO checker"},
         {"command": "f9", "description": "FreshLPG CO checker threshold"},
-    {"command": "f10", "description": "Fresh Ceramics SO checker threshold"},
-    {"command": "ceramics_so", "description": "Fresh Ceramics SO checker threshold"},
-    {"command": "f11", "description": "Fresh Ceramics CO checker threshold"},
-    {"command": "ceramics_co", "description": "Fresh Ceramics CO checker threshold"},
         {"command": "f9_start", "description": "Set start hour for f9 window"},
         {"command": "f9_end", "description": "Set end hour for f9 window"},
-        {"command": "o9", "description": "Turn off FreshLPG CO checker"}
+        {"command": "o9", "description": "Turn off FreshLPG CO checker"},
+        {"command": "f10", "description": "Fresh Ceramics SO checker threshold"},
+        {"command": "f10_start", "description": "Set start hour for f10 window"},
+        {"command": "f10_end", "description": "Set end hour for f10 window"},
+        {"command": "o10", "description": "Turn off Fresh Ceramics SO checker"},
+        {"command": "f11", "description": "Fresh Ceramics CO checker threshold"},
+        {"command": "f11_start", "description": "Set start hour for f11 window"},
+        {"command": "f11_end", "description": "Set end hour for f11 window"},
+        {"command": "o11", "description": "Turn off Fresh Ceramics CO checker"}
     ]
     
     try:
@@ -2766,6 +2772,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                     "SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES": SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES,
                     "FRESHLPG_SO_PENDING_THRESHOLD_MINUTES": FRESHLPG_SO_PENDING_THRESHOLD_MINUTES,
                     "FRESHLPG_CO_PENDING_THRESHOLD_MINUTES": FRESHLPG_CO_PENDING_THRESHOLD_MINUTES,
+                    "CERAMICS_SO_PENDING_THRESHOLD_MINUTES": CERAMICS_SO_PENDING_THRESHOLD_MINUTES,
+                    "CERAMICS_CO_PENDING_THRESHOLD_MINUTES": CERAMICS_CO_PENDING_THRESHOLD_MINUTES,
                     "OBD_OFFHOURS_START_HOUR": OBD_OFFHOURS_START_HOUR,
                     "OBD_OFFHOURS_END_HOUR": OBD_OFFHOURS_END_HOUR
                 },
@@ -3301,8 +3309,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                 self.send_json_response(200, {"status": "ok", "message": msg})
                                 return
 
-                        # Check if user sent off shortcuts: o1-o9, f1_off-f9_off, f1 off-f9 off
-                        off_match = re.match(r'^(?:/)?(?:o([1-9])|f([1-9])_off|f([1-9])\s+off)$', text)
+                        # Check if user sent off shortcuts: o1-o11, f1_off-f11_off, f1 off-f11 off
+                        off_match = re.match(r'^(?:/)?(?:o(1[0-1]|[1-9])|f(1[0-1]|[1-9])_off|f(1[0-1]|[1-9])\s+off)$', text)
                         if off_match:
                             num = int(next(g for g in off_match.groups() if g is not None))
                             feat_key = f"f{num}"
@@ -3323,7 +3331,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                 self.send_json_response(200, {"status": "ok", "message": msg})
                                 return
 
-                        start_end_match = re.match(r'^(?:/)?f([1-9])_(start|end)$', text)
+                        start_end_match = re.match(r'^(?:/)?f(1[0-1]|[1-9])_(start|end)$', text)
                         if start_end_match:
                             feat_num, action = start_end_match.groups()
                             start_feature_conversation(self, f"f{feat_num}_{action}", config)
@@ -3356,6 +3364,12 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             return
                         elif text in ["f9", "f9 on", "/f9", "/f9_on"]:
                             start_feature_conversation(self, "f9", config)
+                            return
+                        elif text in ["f10", "f10 on", "/f10", "/f10_on", "ceramics_so", "/ceramics_so"]:
+                            start_feature_conversation(self, "f10", config)
+                            return
+                        elif text in ["f11", "f11 on", "/f11", "/f11_on", "ceramics_co", "/ceramics_co"]:
+                            start_feature_conversation(self, "f11", config)
                             return
                         elif text in ["f7_start", "/f7_start"]:
                             start_feature_conversation(self, "f7_start", config)
@@ -3650,6 +3664,54 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     "default": str(F9_END_HOUR_DEFAULT),
                                     "val": str(F9_END_HOUR),
                                     "desc": "end hour for f9 window"
+                                },
+                                {
+                                    "key": "f10",
+                                    "default": f10_def_status,
+                                    "val": f10_status,
+                                    "desc": "fresh ceramics so checker status"
+                                },
+                                {
+                                    "key": "ceramics_so_pending_threshold_minutes",
+                                    "default": ceramics_so_def,
+                                    "val": ceramics_so_val,
+                                    "desc": "fresh ceramics so pending threshold variable"
+                                },
+                                {
+                                    "key": "f10_start",
+                                    "default": str(F10_START_HOUR_DEFAULT),
+                                    "val": str(F10_START_HOUR),
+                                    "desc": "start hour for f10 window"
+                                },
+                                {
+                                    "key": "f10_end",
+                                    "default": str(F10_END_HOUR_DEFAULT),
+                                    "val": str(F10_END_HOUR),
+                                    "desc": "end hour for f10 window"
+                                },
+                                {
+                                    "key": "f11",
+                                    "default": f11_def_status,
+                                    "val": f11_status,
+                                    "desc": "fresh ceramics co checker status"
+                                },
+                                {
+                                    "key": "ceramics_co_pending_threshold_minutes",
+                                    "default": ceramics_co_def,
+                                    "val": ceramics_co_val,
+                                    "desc": "fresh ceramics co pending threshold variable"
+                                },
+                                {
+                                    "key": "f11_start",
+                                    "default": str(F11_START_HOUR_DEFAULT),
+                                    "val": str(F11_START_HOUR),
+                                    "desc": "start hour for f11 window"
+                                },
+                                {
+                                    "key": "f11_end",
+                                    "default": str(F11_END_HOUR_DEFAULT),
+                                    "val": str(F11_END_HOUR),
+                                    "desc": "end hour for f11 window"
                                 }
                             ]
                             
