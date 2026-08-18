@@ -878,8 +878,19 @@ def load_config():
             except Exception:
                 pass
 
-    # Read environments override for API_2_URL_TEMPLATE, API_3_URL_TEMPLATE, API_4_URL_TEMPLATE, API_5_URL_TEMPLATE
-    for i in range(2, 6):
+    # Merge custom apis from config.json into blueprint apis
+    if file_config.get("apis") and isinstance(file_config["apis"], list):
+        for f_api in file_config["apis"]:
+            f_name = f_api.get("name")
+            if f_name:
+                existing = next((a for a in apis if a.get("name") == f_name), None)
+                if existing:
+                    existing.update(f_api)
+                else:
+                    apis.append(f_api)
+
+    # Read environments override for API_2_URL_TEMPLATE..API_6_URL_TEMPLATE
+    for i in (2, 3, 4, 5, 6):
         env_key = f"API_{i}_URL_TEMPLATE"
         env_val = os.environ.get(env_key.upper()) or os.environ.get(env_key.lower())
         env_headers_key = f"API_{i}_HEADERS"
