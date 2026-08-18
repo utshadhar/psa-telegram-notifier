@@ -1,6 +1,7 @@
 @echo off
-:: PSA Telegram Notifier - Smart Watchdog (with logging)
+:: PSA Telegram Notifier - Smart Watchdog (with logging and auto-pull)
 set LOG=C:\Users\admin\.gemini\antigravity-ide\scratch\psa-telegram-notifier\logs\watchdog.log
+cd /d "C:\Users\admin\.gemini\antigravity-ide\scratch\psa-telegram-notifier"
 
 set PS_SCRIPT=%TEMP%\psa_health_check.ps1
 echo try { > "%PS_SCRIPT%"
@@ -17,7 +18,10 @@ if %HEALTH%==0 (
     exit /b 0
 )
 
-echo [%DATE% %TIME%] WATCHDOG: Bot health FAILED (code=%HEALTH%). Force restarting... >> "%LOG%"
+echo [%DATE% %TIME%] WATCHDOG: Bot health FAILED (code=%HEALTH%). Pulling latest code & force restarting... >> "%LOG%"
+git checkout conv_state.json >nul 2>&1
+git pull origin main >> "%LOG%" 2>&1
+
 taskkill /f /im python.exe >nul 2>&1
 taskkill /f /im pythonw.exe >nul 2>&1
 timeout /t 2 /nobreak >nul
