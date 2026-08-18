@@ -1,0 +1,6 @@
+PSA Pending Orders: SO = 133, CO = 29
+SmartSales Pending Orders: SO = 0, CO = 0
+SmartSales OBD Pending: SO = 0, CO = 0
+SAP Contract Pending: SO = 0, CO = 0
+Fresh Ceramics Pending Orders: SO = 0, CO = 0
+FreshLPG Pending Orders: SO = 2, CO = 2

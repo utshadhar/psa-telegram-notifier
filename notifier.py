@@ -827,7 +827,7 @@ def load_config():
     apis = [
         {
             "name": "PSA",
-            "url_template": "https://psa.mgi.org/api/getALLData/{business_date}/{business_date}/0?server=0",
+            "url_template": "https://psa.mgi.org/api/getALLData/{start_date}/{end_date}/0?server=0",
             "filter_pending": True
         },
         {
