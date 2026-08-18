@@ -2478,7 +2478,29 @@ CONV_FEATURE_MAP = {
         "fallback_default": "@UshDhar, +8801838262248",
         "clear_args": [],
         "is_user": True
-    }
+    },
+    "f10": {
+        "var": "CERAMICS_SO_PENDING_THRESHOLD_MINUTES",
+        "default_var": "CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT",
+        "label": "ceramics_so_pending_threshold_minutes",
+        "default_prompt": "ceramics_default_so_pending_threshold_minutes",
+        "current_prompt": "ceramics_so_pending_threshold_minutes",
+        "fallback_default": 15,
+        "clear_args": [["SO", "API_6"], ["SO", "FreshCeramics_Pending_Orders"], ["SO", "ceramics"], ["SO", "mcil"]]
+    },
+    "f11": {
+        "var": "CERAMICS_CO_PENDING_THRESHOLD_MINUTES",
+        "default_var": "CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT",
+        "label": "ceramics_co_pending_threshold_minutes",
+        "default_prompt": "ceramics_default_co_pending_threshold_minutes",
+        "current_prompt": "ceramics_co_pending_threshold_minutes",
+        "fallback_default": 10,
+        "clear_args": [["CO", "API_6"], ["CO", "FreshCeramics_Pending_Orders"], ["CO", "ceramics"], ["CO", "mcil"]]
+    },
+    "f10_start": {"var": "F10_START_HOUR", "default_var": "F10_START_HOUR_DEFAULT", "label": "in which hour I want to start f10", "default_prompt": "default hour I want to start f10", "current_prompt": "in which hour I want to start f10.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f10_end": {"var": "F10_END_HOUR", "default_var": "F10_END_HOUR_DEFAULT", "label": "in which hour I want to end f10", "default_prompt": "default hour I want to end f10", "current_prompt": "in which hour I want to end f10.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f11_start": {"var": "F11_START_HOUR", "default_var": "F11_START_HOUR_DEFAULT", "label": "in which hour I want to start f11", "default_prompt": "default hour I want to start f11", "current_prompt": "in which hour I want to start f11.", "fallback_default": 0, "clear_args": [], "is_hour": True},
+    "f11_end": {"var": "F11_END_HOUR", "default_var": "F11_END_HOUR_DEFAULT", "label": "in which hour I want to end f11", "default_prompt": "default hour I want to end f11", "current_prompt": "in which hour I want to end f11.", "fallback_default": 0, "clear_args": [], "is_hour": True}
 }
 
 FEATURE_VARS = CONV_FEATURE_MAP
