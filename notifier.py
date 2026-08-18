@@ -3801,6 +3801,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     if ok:
                                         check_and_send_pending_alert(b_date, cfg)
                                 except Exception as thread_err:
+                                    import traceback
+                                    traceback.print_exc()
                                     print(f"[{datetime.datetime.now()}] Error handling trigger request in background: {thread_err}")
 
                             threading.Thread(
@@ -3832,6 +3834,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     else:
                                         check_and_send_pending_alert(b_date, cfg)
                                 except Exception as thread_err:
+                                    import traceback
+                                    traceback.print_exc()
                                     LAST_WEBHOOK_ERROR = f"Thread Exception: {str(thread_err)}"
                                     print(f"[{datetime.datetime.now()}] Error handling webhook request in background: {thread_err}")
                             
