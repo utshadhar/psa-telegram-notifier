@@ -32,6 +32,15 @@
       "filter_pending": false,
       "default_process": "CO",
       "label_co": "CON"
+    },
+    {
+      "name": "FreshCeramics_Pending_Orders",
+      "url_template": "https://mcil.mgi.org/api/get-so-payment-collection?start_date={date}&end_date={date}&server_allocation=0&so=1&co=1&so_zone=0&co_zone=0&so_product_line=0&co_product_line=0",
+      "filter_pending": false,
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "Bearer YOUR_BEARER_TOKEN"
+      }
     }
   ],
   "monitoring_start_hour": 9,

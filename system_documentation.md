@@ -142,3 +142,12 @@ To access these endpoints from another PC on the same network:
 * **[stop_render.ps1](file:///C:/Users/admin/.gemini/antigravity-ide/scratch/psa-telegram-notifier/stop_render.ps1)**: A standalone powershell command script to suspend the Render service using the Render API.
 * **[resume_render.ps1](file:///C:/Users/admin/.gemini/antigravity-ide/scratch/psa-telegram-notifier/resume_render.ps1)**: A standalone powershell command script to resume/unsuspend the Render service.
 * **[push_to_github.ps1](file:///C:/Users/admin/.gemini/antigravity-ide/scratch/psa-telegram-notifier/push_to_github.ps1)**: Interactive git helper script to add all changes, commit, and force-push them using your local Git credentials/environment.
+
+## Fresh Ceramics API Integration (Features F10 & F11)
+
+- **Base Domain**: `https://mcil.mgi.org` (Meghna Ceramics Industries Ltd)
+- **SO Unique ID**: `TransactionId`
+- **CO Unique ID**: `pay_id`
+- **Module**: `ceramics_handler.py`
+- **Feature 10 (F10)**: Fresh Ceramics Sales Order (SO) Aging Alert (`/ceramics_so`, `/f10`)
+- **Feature 11 (F11)**: Fresh Ceramics Collection (CO) Aging Alert (`/ceramics_co`, `/f11`)

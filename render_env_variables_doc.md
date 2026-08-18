@@ -45,3 +45,12 @@ If your environment variables on Render are deleted or reset, you can restore th
 | `OBD_OFFHOURS_END_HOUR_DEFAULT` | Default end hour for f7 off-hours | `8` |
 | `CALLMEBOT_USER_DEFAULT` | Default CallMeBot targets (comma-separated list of usernames/phone numbers. Validated for username format or starting with `+`. Invalid list inputs will fall back to `+8801838262248` default) | `@UshDhar, +8801838262248` |
 | `PREFERRED_ENV` | Startup preferred state setting. | `Local` |
+
+### Fresh Ceramics API Configurations (Features 10 & 11)
+
+| Variable Name | Description | Default Value |
+| :--- | :--- | :--- |
+| `CERAMICS_SO_PENDING_THRESHOLD_MINUTES` | Pending threshold in minutes for Fresh Ceramics SO (F10). | `15` |
+| `CERAMICS_CO_PENDING_THRESHOLD_MINUTES` | Pending threshold in minutes for Fresh Ceramics CO (F11). | `10` |
+| `CERAMICS_API_URL_TEMPLATE` | Endpoint template for Fresh Ceramics SO/CO data. | `https://mcil.mgi.org/api/get-so-payment-collection?...` |
+| `CERAMICS_BEARER_TOKEN` | Bearer Authorization token for Fresh Ceramics API. | `2170|6KxNVYnJD5RoVJTac3CsXmoqjNPCB5Y4g2w8HtNzbc8a3149` |

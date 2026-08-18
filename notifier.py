@@ -12,6 +12,7 @@ import socketserver
 import concurrent.futures
 import socket
 import ssl
+import ceramics_handler
 
 # Fix for pythonw.exe: stdout/stderr are None which causes silent crashes in HTTP handler threads.
 # Any print() call inside a request handler crashes the thread if sys.stdout is None.
@@ -217,6 +218,11 @@ FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT = 15
 FRESHLPG_CO_PENDING_THRESHOLD_MINUTES = 10
 FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT = 10
 
+CERAMICS_SO_PENDING_THRESHOLD_MINUTES = 15
+CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT = 15
+CERAMICS_CO_PENDING_THRESHOLD_MINUTES = 10
+CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT = 10
+
 F1_START_HOUR = 0
 F1_START_HOUR_DEFAULT = 0
 F1_END_HOUR = 0
@@ -267,6 +273,16 @@ F9_START_HOUR_DEFAULT = 0
 F9_END_HOUR = 0
 F9_END_HOUR_DEFAULT = 0
 
+F10_START_HOUR = 0
+F10_START_HOUR_DEFAULT = 0
+F10_END_HOUR = 0
+F10_END_HOUR_DEFAULT = 0
+
+F11_START_HOUR = 0
+F11_START_HOUR_DEFAULT = 0
+F11_END_HOUR = 0
+F11_END_HOUR_DEFAULT = 0
+
 CALLMEBOT_USER = "@UshDhar"
 CALLMEBOT_USER_DEFAULT = "+8801838262248"
 
@@ -295,22 +311,26 @@ def load_thresholds():
     global CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES
     global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES, OBD_OFFHOURS_START_HOUR, OBD_OFFHOURS_END_HOUR
     global FRESHLPG_SO_PENDING_THRESHOLD_MINUTES, FRESHLPG_CO_PENDING_THRESHOLD_MINUTES
+    global CERAMICS_SO_PENDING_THRESHOLD_MINUTES, CERAMICS_CO_PENDING_THRESHOLD_MINUTES
     global CALLMEBOT_USER
     global F1_START_HOUR, F1_END_HOUR, F2_START_HOUR, F2_END_HOUR, F3_START_HOUR, F3_END_HOUR
     global F4_START_HOUR, F4_END_HOUR, F5_START_HOUR, F5_END_HOUR, F6_START_HOUR, F6_END_HOUR
     global F7_START_HOUR, F7_END_HOUR, F8_START_HOUR, F8_END_HOUR, F9_START_HOUR, F9_END_HOUR
+    global F10_START_HOUR, F10_END_HOUR, F11_START_HOUR, F11_END_HOUR
     
     global PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, PSA_CO_PENDING_THRESHOLD_MINUTES_DEFAULT, OBD_PENDING_THRESHOLD_MINUTES_DEFAULT
     global CEMENTAPI_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, CEMENTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
     global CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
     global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT, OBD_OFFHOURS_START_HOUR_DEFAULT, OBD_OFFHOURS_END_HOUR_DEFAULT
     global FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
+    global CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
     global CALLMEBOT_USER_DEFAULT
     global F1_START_HOUR_DEFAULT, F1_END_HOUR_DEFAULT, F2_START_HOUR_DEFAULT, F2_END_HOUR_DEFAULT
     global F3_START_HOUR_DEFAULT, F3_END_HOUR_DEFAULT, F4_START_HOUR_DEFAULT, F4_END_HOUR_DEFAULT
     global F5_START_HOUR_DEFAULT, F5_END_HOUR_DEFAULT, F6_START_HOUR_DEFAULT, F6_END_HOUR_DEFAULT
     global F7_START_HOUR_DEFAULT, F7_END_HOUR_DEFAULT, F8_START_HOUR_DEFAULT, F8_END_HOUR_DEFAULT
     global F9_START_HOUR_DEFAULT, F9_END_HOUR_DEFAULT
+    global F10_START_HOUR_DEFAULT, F10_END_HOUR_DEFAULT, F11_START_HOUR_DEFAULT, F11_END_HOUR_DEFAULT
     
     global PREFERRED_ENV, ACTIVE_ENV, CONFIG_ERROR
 
@@ -828,6 +848,12 @@ def load_config():
             "filter_pending": False
         },
         {
+            "name": "API_6",
+            "url_template": ceramics_handler.DEFAULT_CERAMICS_URL_TEMPLATE,
+            "headers": {"Accept": "application/json", "Authorization": f"Bearer {ceramics_handler.DEFAULT_CERAMICS_BEARER_TOKEN}"},
+            "filter_pending": False
+        },
+        {
             "name": "API_5",
             "url_template": "https://freshlpg.mgi.org/api/get-so-payment-collection?start_date={date}&end_date={date}&server_allocation=0&so=1&co=1&so_zone=0&co_zone=0&so_product_line=0&co_product_line=0",
             "headers": {"Accept": "application/json", "Authorization": "Bearer 2170|6KxNVYnJD5RoVJTac3CsXmoqjNPCB5Y4g2w8HtNzbc8a3149"},
@@ -933,10 +959,16 @@ def is_empty_value(val):
     return s == "" or s.lower() in ("null", "none", "-")
 
 def is_so_pending(item, api_name=None):
+    if api_name and api_name in ["API_6", "FreshCeramics_Pending_Orders", "ceramics", "mcil", "freshceramics"]:
+        return ceramics_handler.is_ceramics_so_pending(item)
+
     """Checks if a Sales Order is pending (always True as all APIs are default pending)."""
     return True
 
 def is_co_pending(item, api_name=None):
+    if api_name and api_name in ["API_6", "FreshCeramics_Pending_Orders", "ceramics", "mcil", "freshceramics"]:
+        return ceramics_handler.is_ceramics_co_pending(item)
+
     """Checks if a Collection Order is pending (always True as all APIs are default pending)."""
     return True
 
@@ -1020,6 +1052,8 @@ def track_and_alert_aging(tx_id, server, process_type, api_name, config):
         feat_key = "f6"
     elif api_name in ["API_5", "FreshLPG_Pending_Orders", "freshlpg"]:
         feat_key = "f8" if process_type == "SO" else "f9"
+    elif api_name in ["API_6", "FreshCeramics_Pending_Orders", "ceramics", "mcil", "freshceramics"]:
+        feat_key = "f10" if process_type == "SO" else "f11"
     else:
         feat_key = "f1"
 
@@ -1237,7 +1271,11 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
                     return True
         return False
 
-    def get_unique_id(item, keys):
+def get_unique_id(item, keys):
+    if isinstance(keys, str) and keys in ["API_6", "FreshCeramics_Pending_Orders", "ceramics", "mcil", "freshceramics"]:
+        uid = ceramics_handler.get_ceramics_so_unique_id(item) or ceramics_handler.get_ceramics_co_unique_id(item)
+        if uid: return uid
+
         for key in keys:
             if key in item:
                 val = item[key]
@@ -1985,6 +2023,10 @@ def register_bot_commands(config):
         {"command": "f8_end", "description": "Set end hour for f8 window"},
         {"command": "o8", "description": "Turn off FreshLPG SO checker"},
         {"command": "f9", "description": "FreshLPG CO checker threshold"},
+    {"command": "f10", "description": "Fresh Ceramics SO checker threshold"},
+    {"command": "ceramics_so", "description": "Fresh Ceramics SO checker threshold"},
+    {"command": "f11", "description": "Fresh Ceramics CO checker threshold"},
+    {"command": "ceramics_co", "description": "Fresh Ceramics CO checker threshold"},
         {"command": "f9_start", "description": "Set start hour for f9 window"},
         {"command": "f9_end", "description": "Set end hour for f9 window"},
         {"command": "o9", "description": "Turn off FreshLPG CO checker"}
@@ -3330,6 +3372,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             f7_status = "on" if SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES > 0 else "off"
                             f8_status = "on" if FRESHLPG_SO_PENDING_THRESHOLD_MINUTES > 0 else "off"
                             f9_status = "on" if FRESHLPG_CO_PENDING_THRESHOLD_MINUTES > 0 else "off"
+                            f10_status = "on" if CERAMICS_SO_PENDING_THRESHOLD_MINUTES > 0 else "off"
+                            f11_status = "on" if CERAMICS_CO_PENDING_THRESHOLD_MINUTES > 0 else "off"
                             
                             f1_def_status = "on" if PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
                             f2_def_status = "on" if PSA_CO_PENDING_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
@@ -3340,6 +3384,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             f7_def_status = "on" if SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
                             f8_def_status = "on" if FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
                             f9_def_status = "on" if FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
+                            f10_def_status = "on" if CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
+                            f11_def_status = "on" if CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
                             
                             psa_so_val = f"{PSA_SO_PENDING_THRESHOLD_MINUTES} min" if PSA_SO_PENDING_THRESHOLD_MINUTES > 0 else "off"
                             psa_co_val = f"{PSA_CO_PENDING_THRESHOLD_MINUTES} min" if PSA_CO_PENDING_THRESHOLD_MINUTES > 0 else "off"
@@ -3350,6 +3396,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             smartsales_obd_offhours_val = f"{SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES} min" if SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES > 0 else "off"
                             freshlpg_so_val = f"{FRESHLPG_SO_PENDING_THRESHOLD_MINUTES} min" if FRESHLPG_SO_PENDING_THRESHOLD_MINUTES > 0 else "off"
                             freshlpg_co_val = f"{FRESHLPG_CO_PENDING_THRESHOLD_MINUTES} min" if FRESHLPG_CO_PENDING_THRESHOLD_MINUTES > 0 else "off"
+                            ceramics_so_val = f"{CERAMICS_SO_PENDING_THRESHOLD_MINUTES} min" if CERAMICS_SO_PENDING_THRESHOLD_MINUTES > 0 else "off"
+                            ceramics_co_val = f"{CERAMICS_CO_PENDING_THRESHOLD_MINUTES} min" if CERAMICS_CO_PENDING_THRESHOLD_MINUTES > 0 else "off"
                             
                             psa_so_def = f"{PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT} min" if PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
                             psa_co_def = f"{PSA_CO_PENDING_THRESHOLD_MINUTES_DEFAULT} min" if PSA_CO_PENDING_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
@@ -3360,6 +3408,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             smartsales_obd_offhours_def = f"{SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT} min" if SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
                             freshlpg_so_def = f"{FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT} min" if FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
                             freshlpg_co_def = f"{FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT} min" if FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
+                            ceramics_so_def = f"{CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT} min" if CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
+                            ceramics_co_def = f"{CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT} min" if CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT > 0 else "off"
                             
                             configs_metadata = [
                                 {

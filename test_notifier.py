@@ -1254,5 +1254,43 @@ class TestPSATelegramNotifier(unittest.TestCase):
         target = notifier.get_next_schedule_target(dt, 30)
         self.assertEqual(target, datetime.datetime(2026, 8, 2, 0, 30, 0))
 
+
+    def test_fresh_ceramics_handler_module(self):
+        import ceramics_handler
+        so_item = {
+            "process": "SO",
+            "TransactionId": "704881120L",
+            "do_number": "O001737-2026-00001",
+            "SO_Number": "check sap"
+        }
+        co_item = {
+            "process": "CO",
+            "pay_id": 50399,
+            "payment_number": "C002245-2026-00018",
+            "collection_no": None
+        }
+        
+        self.assertEqual(ceramics_handler.get_ceramics_so_unique_id(so_item), "704881120L")
+        self.assertEqual(ceramics_handler.get_ceramics_co_unique_id(co_item), "50399")
+        self.assertTrue(ceramics_handler.is_ceramics_so_pending(so_item))
+        self.assertTrue(ceramics_handler.is_ceramics_co_pending(co_item))
+
+        parsed = ceramics_handler.parse_ceramics_payload([so_item, co_item])
+        self.assertEqual(len(parsed["SO"]), 1)
+        self.assertEqual(len(parsed["CO"]), 1)
+
+    def test_fresh_ceramics_thresholds_and_alerts(self):
+        import ceramics_handler
+        self.assertEqual(notifier.CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, 15)
+        self.assertEqual(notifier.CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT, 10)
+        
+        so_item = {"process": "SO", "TransactionId": "TX_CERAMICS_101"}
+        co_item = {"process": "CO", "pay_id": "PAY_CERAMICS_202"}
+        
+        so_uid = ceramics_handler.get_ceramics_so_unique_id(so_item)
+        co_uid = ceramics_handler.get_ceramics_co_unique_id(co_item)
+        self.assertEqual(so_uid, "TX_CERAMICS_101")
+        self.assertEqual(co_uid, "PAY_CERAMICS_202")
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,143 @@
+================================================================================
+COMPLETE PROMPT & SPECIFICATION: FRESH CERAMICS (MCIL) API INTEGRATION
+================================================================================
+
+PROJECT: PSA Telegram Notifier
+COMPANY: Meghna Ceramics Industries Ltd (MCIL) / Fresh Ceramics
+BASE API DOMAIN: https://mcil.mgi.org
+
+--------------------------------------------------------------------------------
+1. EXECUTIVE OVERVIEW & SYSTEM ARCHITECTURE
+--------------------------------------------------------------------------------
+This specification outlines the complete integration of the Fresh Ceramics API
+(Meghna Ceramics Industries Ltd) into the PSA Telegram Notifier service.
+Fresh Ceramics monitoring introduces two core features:
+  - Feature 10 (F10): Fresh Ceramics Sales Order (SO) Pending Aging Alert
+  - Feature 11 (F11): Fresh Ceramics Collection (CO) Pending Aging Alert
+
+The integration is implemented in a dedicated modular file: `ceramics_handler.py`,
+which is cleanly imported into `notifier.py`.
+
+--------------------------------------------------------------------------------
+2. API ENDPOINTS & FLOW SPECIFICATION
+--------------------------------------------------------------------------------
+
+[Step 1: Retrieve Pending SO and CO Data]
+  Endpoint: GET /api/get-so-payment-collection
+  Full URL: https://mcil.mgi.org/api/get-so-payment-collection?start_date={YYYY-MM-DD}&end_date={YYYY-MM-DD}&server_allocation=0&so=1&co=1&so_zone=0&co_zone=0&so_product_line=0&co_product_line=0
+  Headers:
+    Accept: application/json
+    Authorization: Bearer 2170|6KxNVYnJD5RoVJTac3CsXmoqjNPCB5Y4g2w8HtNzbc8a3149
+  Purpose: Retrieve raw pending Sales Order (SO) and Collection (CO) JSON records for the target business date.
+
+[Step 2: View SAP-Updated SO and Collection Data]
+  Endpoint: GET /api/view-so-payment-collection
+  Full URL: https://mcil.mgi.org/api/view-so-payment-collection?start_date={YYYY-MM-DD}&end_date={YYYY-MM-DD}&server_allocation=0&so=1&co=1&so_zone=0&co_zone=0&so_product_line=0&co_product_line=0&view_so=0
+  Headers:
+    Accept: application/json
+    Authorization: Bearer 2170|6KxNVYnJD5RoVJTac3CsXmoqjNPCB5Y4g2w8HtNzbc8a3149
+  Purpose: Fetch SAP-processed status to obtain updated `SO_Number` and `collection_no`.
+
+[Step 3: Update Sales Order (SO)]
+  Endpoint: POST /api/updateData/1?key=ps_data_so
+  Full URL: https://mcil.mgi.org/api/updateData/1?key=ps_data_so
+  Form Parameters:
+    - line_id: String / Integer (e.g. "47507")
+    - do_number: String (e.g. "O005490-2026-00432")
+    - so_number: String (e.g. "128102315")
+    - so_note: String (e.g. "-")
+  Purpose: Post SAP-generated SO number back to SmartSales system.
+
+[Step 4: Update Collection (CO)]
+  Endpoint: POST /api/store-so-collection
+  Full URL: https://mcil.mgi.org/api/store-so-collection?pay_id={PAY_ID}&collection_no={COLLECTION_NO}
+  Headers:
+    Accept: application/json
+    Authorization: Bearer 1766|9TPsSMukNSsgduSMaBDW0QaWIBro3UmNqXdNbpIRc37b020b
+  Purpose: Store SAP collection document number.
+
+--------------------------------------------------------------------------------
+3. RESPONSE DATA SCHEMAS & UNIQUE ID RESOLUTION
+--------------------------------------------------------------------------------
+
+[SO Response Fields Schema]
+  - process: "SO"
+  - TransactionId (String, e.g. "704881120L") --> PRIMARY UNIQUE ID FOR SO
+  - do_number (String, e.g. "O001737-2026-00001")
+  - Line_Id (Integer, e.g. 50682)
+  - Po_Id (Integer, e.g. 45150)
+  - date_time (Date, e.g. "2026-07-02")
+  - acc_approved_date_time (DateTime, e.g. "2026-07-02 11:07:21 AM")
+  - order_type (String, e.g. "ZNSO")
+  - Sales_Org (Integer, e.g. 1230)
+  - Destination_Channel (Integer, e.g. 10)
+  - Division (String, e.g. "L")
+  - Material_Code (String, e.g. "CEMFUSPCC2BM50K2PL")
+  - Sold_To_Party (Integer, e.g. 1001773)
+  - Target_Qty (Number, e.g. 100)
+  - Target_Qty_Pcs (Number, e.g. 100)
+  - plant_code (String, e.g. "1222")
+  - Item_Category (String, e.g. "ZTAN")
+  - CCA (String, e.g. "120L")
+  - serverAllocation (String, e.g. "4")
+  - zone_name (String, e.g. "Zone 013")
+  - SO_Number (String, e.g. "128102315")
+
+[CO Response Fields Schema]
+  - process: "CO"
+  - pay_id (Integer, e.g. 50399) --> PRIMARY UNIQUE ID FOR CO
+  - TransactionId (String, e.g. "5039914442")
+  - order_payment_id (Integer, e.g. 70527)
+  - payment_number (String, e.g. "C002245-2026-00018")
+  - receiving_company_code (String, e.g. "1200")
+  - customerName (String, e.g. "Younus Traders")
+  - customer_code (String, e.g. "0001027810")
+  - bankName (String, e.g. "Pubali Bank Ltd.")
+  - bankBranchName (String, e.g. "RANGUNIA")
+  - routing_code (String, e.g. "175156405")
+  - instrument_no (String, e.g. "UCIL")
+  - currentTime (DateTime, e.g. "2026-07-02 12:12:46")
+  - instrument_issue_date (Date, e.g. "2026-07-02")
+  - instrument_amount (Number, e.g. 98400)
+  - instrument_type (Integer, e.g. 4)
+  - compnay_code (Integer, e.g. 1200)
+  - credit_control_area (String, e.g. "120M")
+  - line (String, e.g. "M")
+  - allocaton_amount (Number, e.g. 98400)
+  - bank_account_number (String, e.g. "SD-3555102002388")
+  - house_bank_key (String, e.g. "PBL01")
+  - orderNumber (String, e.g. "O002245-2026-00029")
+  - approvedTime (DateTime, e.g. "2026-07-02 12:12:46")
+  - approvedBy (String, e.g. "Md. Mahbubul Alam")
+  - collection_no (String, e.g. "1000001528")
+
+--------------------------------------------------------------------------------
+4. CONFIGURATION & ENVIRONMENT VARIABLES
+--------------------------------------------------------------------------------
+- CERAMICS_SO_PENDING_THRESHOLD_MINUTES: Pending threshold in minutes for Fresh Ceramics SO (Default: 15)
+- CERAMICS_CO_PENDING_THRESHOLD_MINUTES: Pending threshold in minutes for Fresh Ceramics CO (Default: 10)
+- CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT: Default backup threshold for SO (15)
+- CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT: Default backup threshold for CO (10)
+- CERAMICS_API_URL_TEMPLATE: Full URL template override for get-so-payment-collection
+- CERAMICS_BEARER_TOKEN: Bearer token override for Authorization header
+- F10_START_HOUR / F10_END_HOUR: Operational hours schedule for Feature 10 (Ceramics SO)
+- F11_START_HOUR / F11_END_HOUR: Operational hours schedule for Feature 11 (Ceramics CO)
+
+--------------------------------------------------------------------------------
+5. TELEGRAM BOT INTERACTIVE COMMANDS & NOTIFICATION MESSAGES
+--------------------------------------------------------------------------------
+- Aging Alert Messages:
+  SO: "Fresh Ceramics SO TransactionId is {TransactionId} in server {server} for {M} min {S} sec"
+  CO: "Fresh Ceramics CO pay_id is {pay_id} in server {server} for {M} min {S} sec"
+
+- Telegram Slash Commands:
+  /ceramics_so [minutes]  (or /f10) -> Toggle or set threshold for Fresh Ceramics SO
+  /ceramics_co [minutes]  (or /f11) -> Toggle or set threshold for Fresh Ceramics CO
+
+- Interactive Buttons:
+  [F10 Ceramics SO: ON/OFF (15 min)]
+  [F11 Ceramics CO: ON/OFF (10 min)]
+
+================================================================================
+END OF SPECIFICATION
+================================================================================
