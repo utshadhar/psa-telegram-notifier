@@ -1192,6 +1192,9 @@ def parse_psa_data(data, filter_pending=True, default_process=None, api_name=Non
     raw_so_list = []
     raw_co_list = []
 
+    if isinstance(data, dict) and "data" in data and isinstance(data["data"], (dict, list)):
+        data = data["data"]
+
     if isinstance(data, dict):
         if "SO" in data or "CO" in data:
             raw_so_list = data.get("SO", [])
