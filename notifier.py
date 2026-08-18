@@ -3946,11 +3946,24 @@ def main():
         lp_thread = threading.Thread(target=run_long_polling_loop, args=(stop_event,), daemon=True, name="LongPollingThread")
         lp_thread.start()
 
-        # Send Telegram startup notification on boot/restart
+        # Send Telegram startup notification on boot/restart with latest Git version info
         def send_startup_alert(cfg):
             try:
                 now_str = get_local_time(cfg).strftime("%Y-%m-%d %H:%M:%S")
-                boot_msg = f"🔄 *PSA Telegram Notifier Restarted*\n\nBot services online at `{now_str}` (Local).\nMonitoring & auto-healing active."
+                git_info = "Unknown"
+                try:
+                    import subprocess
+                    cmd = ["git", "log", "-1", "--format=%h: %s"]
+                    git_info = subprocess.check_output(cmd, cwd=SCRIPT_DIR, text=True, stderr=subprocess.DEVNULL).strip()
+                except Exception:
+                    pass
+
+                boot_msg = (
+                    f"🚀 *New Version Loaded & Active!*\n\n"
+                    f"📌 *Version/Commit:* `{git_info}`\n"
+                    f"🕒 *Loaded At:* `{now_str}` (Local)\n"
+                    f"✅ All monitoring & auto-healing systems active."
+                )
                 send_telegram_notification(boot_msg, cfg)
             except Exception as e:
                 print(f"[{datetime.datetime.now()}] Failed to send startup alert: {e}")
