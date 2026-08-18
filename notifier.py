@@ -1113,6 +1113,13 @@ def track_and_alert_aging(tx_id, server, process_type, api_name, config):
             threshold = CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES
         else:
             return
+    elif api_name in ["API_6", "FreshCeramics_Pending_Orders", "ceramics", "mcil", "freshceramics"]:
+        if process_type == "SO":
+            threshold = CERAMICS_SO_PENDING_THRESHOLD_MINUTES
+        elif process_type == "CO":
+            threshold = CERAMICS_CO_PENDING_THRESHOLD_MINUTES
+        else:
+            return
     else:
         # Fallback: disable alerts for completely unknown APIs
         return
@@ -1752,7 +1759,7 @@ def check_and_send_pending_alert(business_date, config, force=False):
         with urllib.request.urlopen(req, timeout=15) as response:
             raw_data = response.read().decode('utf-8')
             data = json.loads(raw_data)
-            stats = parse_psa_data(data, filter_pending=True, api_name="PSA_PENDING_CHECK", config=config)
+            stats = parse_psa_data(data, filter_pending=True, api_name="PSA_PENDING_CHECK", config=config) or {}
             total_so = stats.get("total_pending_so", 0)
             total_co = stats.get("total_pending_co", 0)
             if total_so > 0 or total_co > 0:
