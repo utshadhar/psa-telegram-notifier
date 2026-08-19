@@ -3,6 +3,7 @@ import sys
 import json
 import datetime
 import time
+import re
 import urllib.request
 import urllib.parse
 from urllib.parse import urlparse, parse_qs
@@ -27,15 +28,16 @@ LAST_LONG_POLL_TIME = time.time()
 LAST_TELEGRAM_OFFSET = 0
 CURRENT_LONG_POLL_RESPONSE = None
 
-# Single-instance socket lock to prevent multiple python processes from running simultaneously
-SINGLE_INSTANCE_PORT = 8089
-try:
-    _single_instance_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    _single_instance_socket.bind(('127.0.0.1', SINGLE_INSTANCE_PORT))
-    _single_instance_socket.listen(1)
-except OSError:
-    # Another instance of notifier.py is already running. Exit silently.
-    sys.exit(0)
+def acquire_single_instance_lock():
+    global _single_instance_socket
+    SINGLE_INSTANCE_PORT = 8089
+    try:
+        _single_instance_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _single_instance_socket.bind(('127.0.0.1', SINGLE_INSTANCE_PORT))
+        _single_instance_socket.listen(1)
+        return True
+    except OSError:
+        return False
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.json")
@@ -2926,12 +2928,11 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                         chat = message.get("chat")
                         chat_id = str(chat.get("id")) if chat else ""
                         text = str(message.get("text") or "").strip().lower()
-                        import re
                         text = re.sub(r'@[a-zA-Z0-9_]+', '', text).strip()
                     
                     log_message(f"Webhook received text='{text}' in state='{USER_CONVERSATION_STATE}' from chat_id={chat_id}")
                     expected_chat_id = str(config.get("telegram_chat_id", "")).strip()
-                    is_trigger_cmd = any(kw in text for kw in ["trigger", "start", "feature", "status", "report", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9"])
+                    is_trigger_cmd = any(kw in text for kw in ["trigger", "start", "feature", "status", "report", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "o1", "o2", "o3", "o4", "o5", "o6", "o7", "o8", "o9", "o10", "o11"])
                     
                     if not expected_chat_id or chat_id == expected_chat_id or is_trigger_cmd:
                         if chat_id and (not expected_chat_id or (is_trigger_cmd and chat_id != expected_chat_id)):
@@ -3834,6 +3835,8 @@ def main():
             pass
         finally:
             server.server_close()
+    if not acquire_single_instance_lock():
+        print(f"[{datetime.datetime.now()}] Another instance of PSA Notifier is already running. Exiting.")
         sys.exit(0)
 
     config = load_config()

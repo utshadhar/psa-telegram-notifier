@@ -795,6 +795,7 @@ class TestPSATelegramNotifier(unittest.TestCase):
                 handler.do_POST()
                 
             # Test Flow 1: f7 -> Current -> 15 -> Yes -> Current
+            notifier.set_user_conv_state("123", None)
             notifier.USER_CONVERSATION_STATE = None
             notifier.SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT = 10
             simulate_webhook_msg("f7")
@@ -843,11 +844,13 @@ class TestPSATelegramNotifier(unittest.TestCase):
             mock_send.assert_called_with("SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES checker is off.", {"telegram_chat_id": "123"})
             mock_send.reset_mock()
 
-            # Test Flow 4: f7 -> None
+            # Test Flow 4: f7 -> None -> No -> Off
             simulate_webhook_msg("f7")
-            self.assertEqual(notifier.USER_CONVERSATION_STATE, "SELECT_MODE_F7")
+            self.assertEqual(notifier.get_user_conv_state("123"), "SELECT_MODE_F7")
             simulate_webhook_msg("none")
-            self.assertEqual(notifier.USER_CONVERSATION_STATE, None)
+            self.assertEqual(notifier.get_user_conv_state("123"), "AWAITING_NONE_CONFIRM_F7")
+            simulate_webhook_msg("no")
+            self.assertEqual(notifier.get_user_conv_state("123"), None)
             self.assertEqual(notifier.SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES, 0)
             mock_send.assert_called_with("SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES checker is off.", {"telegram_chat_id": "123"})
             mock_send.reset_mock()
@@ -899,7 +902,7 @@ class TestPSATelegramNotifier(unittest.TestCase):
                 handler.do_POST()
 
             # Trigger f1 text message first -> state SELECT_MODE_F1
-            notifier.USER_CONVERSATION_STATE = None
+            notifier.set_user_conv_state("123", None)
             import io
             payload = {
                 "message": {
@@ -912,12 +915,12 @@ class TestPSATelegramNotifier(unittest.TestCase):
             handler.rfile = io.BytesIO(body_bytes)
             handler.do_POST()
             
-            self.assertEqual(notifier.USER_CONVERSATION_STATE, "SELECT_MODE_F1")
+            self.assertEqual(notifier.get_user_conv_state("123"), "SELECT_MODE_F1")
             mock_send.reset_mock()
             
             # Click default inline button -> state AWAITING_DEFAULT_VAL_F1
             simulate_callback_query("default")
-            self.assertEqual(notifier.USER_CONVERSATION_STATE, "AWAITING_DEFAULT_VAL_F1")
+            self.assertEqual(notifier.get_user_conv_state("123"), "AWAITING_DEFAULT_VAL_F1")
             mock_send.assert_called_with("psa_default_so_pending_threshold_minutes", {"telegram_chat_id": "123"})
             mock_send.reset_mock()
 
@@ -1325,7 +1328,7 @@ class TestPSATelegramNotifier(unittest.TestCase):
             send_msg("no")
             self.assertIsNone(notifier.get_user_conv_state("999"))
             self.assertEqual(notifier.OBD_PENDING_THRESHOLD_MINUTES, 0)
-            mock_send.assert_called_with("obd_pending_threshold_minutes checker is off.", {"telegram_chat_id": "999"})
+            mock_send.assert_called_with("Smartsales_obd_pending_threshold_minutes checker is off.", {"telegram_chat_id": "999"})
 
             # Path 2: /f3 -> None -> Yes -> Default -> ON
             notifier.OBD_PENDING_THRESHOLD_MINUTES_DEFAULT = 25
