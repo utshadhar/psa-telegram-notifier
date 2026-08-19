@@ -2120,8 +2120,6 @@ def run_scheduled_check(business_date=None, force=False):
         stats = fetch_all_apis(business_date, config)
         msg = format_telegram_message(stats, business_date, config)
         ok, err = send_telegram_notification(msg, config)
-        if ok:
-            check_and_send_pending_alert(business_date, config)
         return ok
     except Exception as e:
         LAST_API_POLL_SUCCESS = False
@@ -2834,9 +2832,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             pass
                     stats = fetch_all_apis(b_date, cfg)
                     msg = format_telegram_message(stats, b_date, cfg)
-                    ok, err = send_telegram_notification(msg, cfg)
-                    if ok:
-                        check_and_send_pending_alert(b_date, cfg)
+                    send_telegram_notification(msg, cfg)
                 except Exception as thread_err:
                     log_message(f"Error handling trigger request in background: {thread_err}")
 
@@ -3720,9 +3716,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                 try:
                                     stats = fetch_all_apis(b_date, cfg)
                                     msg = format_telegram_message(stats, b_date, cfg)
-                                    ok, err = send_telegram_notification(msg, cfg)
-                                    if ok:
-                                        check_and_send_pending_alert(b_date, cfg)
+                                    send_telegram_notification(msg, cfg)
                                 except Exception:
                                     import traceback
                                     log_message(f"Error handling trigger request in background: {traceback.format_exc()}")
