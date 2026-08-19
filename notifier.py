@@ -2242,6 +2242,15 @@ PROCESSED_UPDATE_IDS = set()
 PROCESSED_UPDATE_LOCK = threading.Lock()
 LAST_PROCESSED_ACTION = {"key": None, "time": 0}
 
+CHAT_SERIAL_LOCKS = {}
+CHAT_SERIAL_LOCKS_GUARD = threading.Lock()
+
+def get_chat_serial_lock(chat_id):
+    with CHAT_SERIAL_LOCKS_GUARD:
+        if chat_id not in CHAT_SERIAL_LOCKS:
+            CHAT_SERIAL_LOCKS[chat_id] = threading.Lock()
+        return CHAT_SERIAL_LOCKS[chat_id]
+
 def process_long_poll_update(update, config):
     global LAST_PROCESSED_ACTION
     try:
@@ -2256,6 +2265,7 @@ def process_long_poll_update(update, config):
 
         # De-duplicate identical fast consecutive taps within 1.5 seconds
         message = update.get("message") or update.get("edited_message") or update.get("callback_query")
+        chat_id = ""
         if message:
             chat = message.get("chat") or (message.get("message", {}).get("chat") if isinstance(message, dict) else None)
             chat_id = str(chat.get("id")) if isinstance(chat, dict) else ""
@@ -2271,18 +2281,17 @@ def process_long_poll_update(update, config):
                     LAST_PROCESSED_ACTION["time"] = now_ts
 
         mock_handler = MockHandler(update)
-        # Run do_POST in a daemon thread so the long polling loop is NEVER blocked.
-        # Previously this was synchronous which caused the entire polling loop to freeze
-        # whenever do_POST made network calls (deleteWebhook, fetch_all_apis, etc.).
-        threading.Thread(target=_safe_do_post, args=(mock_handler,), daemon=True).start()
+        threading.Thread(target=_safe_do_post, args=(mock_handler, chat_id), daemon=True).start()
     except Exception as e:
         log_message(f"Error processing long polling update: {e}")
 
-def _safe_do_post(mock_handler):
-    try:
-        RequestHandler.do_POST(mock_handler)
-    except Exception as e:
-        log_message(f"Error in background do_POST handler: {e}")
+def _safe_do_post(mock_handler, chat_id=""):
+    lock = get_chat_serial_lock(chat_id)
+    with lock:
+        try:
+            RequestHandler.do_POST(mock_handler)
+        except Exception as e:
+            log_message(f"Error in background do_POST handler: {e}")
 
 
 
