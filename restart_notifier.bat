@@ -9,7 +9,8 @@ echo [%DATE% %TIME%] Pulling latest updates from GitHub...
 git checkout conv_state.json >nul 2>&1
 git pull origin main >nul 2>&1
 
-echo [%DATE% %TIME%] Stopping ALL python processes (including zombies)...
+echo [%DATE% %TIME%] Stopping ALL python processes (including zombies and port holders)...
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8085,8089 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }" >nul 2>&1
 taskkill /f /im python.exe >nul 2>&1
 taskkill /f /im pythonw.exe >nul 2>&1
 

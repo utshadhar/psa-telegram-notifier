@@ -216,14 +216,7 @@ IS_STANDBY = False
 BOTH_DEAD_ALERT_SENT = False
 
 def is_current_instance_active():
-    is_render = (os.environ.get("RENDER") is not None or os.environ.get("RENDER_SERVICE_ID") is not None)
-    if not is_render:
-        return True
-    cfg = load_config()
-    pref = cfg.get("PREFERRED_ENV", PREFERRED_ENV)
-    if pref == "Local" and ACTIVE_ENV != "Render":
-        return False
-    return not IS_STANDBY
+    return True
 LAST_API_POLL_SUCCESS = True
 CONFIG_ERROR = False
 
@@ -660,110 +653,7 @@ def save_thresholds():
         print(f"Error saving to config.json: {e}")
 
 def update_render_env_vars_async():
-    """
-    Spawns a background thread to update all default environment variable thresholds via Render API,
-    and triggers a redeployment to apply the change.
-    """
-    return
-        
-    def run_update():
-        global PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, PSA_CO_PENDING_THRESHOLD_MINUTES_DEFAULT, OBD_PENDING_THRESHOLD_MINUTES_DEFAULT
-        global CEMENTAPI_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, CEMENTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
-        global CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
-        global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT, OBD_OFFHOURS_START_HOUR_DEFAULT, OBD_OFFHOURS_END_HOUR_DEFAULT
-        global FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
-        global CALLMEBOT_USER_DEFAULT
-        global PREFERRED_ENV
-        
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        }
-        
-        active_states = {
-            "PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT": PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT,
-            "PSA_CO_PENDING_THRESHOLD_MINUTES_DEFAULT": PSA_CO_PENDING_THRESHOLD_MINUTES_DEFAULT,
-            "OBD_PENDING_THRESHOLD_MINUTES_DEFAULT": OBD_PENDING_THRESHOLD_MINUTES_DEFAULT,
-            "CEMENTAPI_SO_PENDING_THRESHOLD_MINUTES_DEFAULT": CEMENTAPI_SO_PENDING_THRESHOLD_MINUTES_DEFAULT,
-            "CEMENTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT": CEMENTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT,
-            "CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT": CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT,
-            "SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT": SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT,
-            "FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT": FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT,
-            "FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT": FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT,
-            "OBD_OFFHOURS_START_HOUR_DEFAULT": OBD_OFFHOURS_START_HOUR_DEFAULT,
-            "OBD_OFFHOURS_END_HOUR_DEFAULT": OBD_OFFHOURS_END_HOUR_DEFAULT,
-            "CALLMEBOT_USER_DEFAULT": CALLMEBOT_USER_DEFAULT,
-            "PREFERRED_ENV": PREFERRED_ENV
-        }
-        
-        # 1. GET all current environment variables
-        get_url = f"https://api.render.com/v1/services/{service_id}/env-vars"
-        get_req = urllib.request.Request(get_url, headers=headers, method="GET")
-        
-        try:
-            with urllib.request.urlopen(get_req, timeout=15) as resp:
-                if resp.status == 200:
-                    raw_data = json.loads(resp.read().decode('utf-8'))
-                    new_env_vars = []
-                    existing_keys = set()
-                    
-                    if isinstance(raw_data, list):
-                        for item in raw_data:
-                            if "envVar" in item:
-                                k = item["envVar"]["key"]
-                                v = item["envVar"]["value"]
-                            else:
-                                k = item.get("key")
-                                v = item.get("value")
-                            
-                            if k:
-                                existing_keys.add(k)
-                                if k in active_states:
-                                    new_env_vars.append({"key": k, "value": str(active_states[k])})
-                                else:
-                                    new_env_vars.append({"key": k, "value": str(v)})
-                                    
-                        # Add any variables not yet existing on Render
-                        for k, val in active_states.items():
-                            if k not in existing_keys:
-                                new_env_vars.append({"key": k, "value": str(val)})
-                                
-                        # 2. PUT the updated list of variables
-                        put_url = f"https://api.render.com/v1/services/{service_id}/env-vars"
-                        put_data = json.dumps(new_env_vars).encode('utf-8')
-                        put_req = urllib.request.Request(put_url, data=put_data, headers=headers, method="PUT")
-                        
-                        with urllib.request.urlopen(put_req, timeout=15) as put_resp:
-                            if put_resp.status in (200, 201, 204):
-                                log_message(f"Render API: Successfully synchronized default thresholds to Render env vars.")
-                            else:
-                                log_message(f"Render API: Received status {put_resp.status} when PUTting env vars.")
-                                return
-                    else:
-                        log_message(f"Render API: Unexpected format for GET env-vars response: {type(raw_data)}")
-                        return
-                else:
-                    log_message(f"Render API: Received status {resp.status} when GETting env vars.")
-                    return
-        except Exception as e:
-            log_message(f"Render API: Failed to GET/PUT environment variables: {e}")
-            return
-            
-        # 3. Trigger a deploy to apply the updated environment variables
-        deploy_url = f"https://api.render.com/v1/services/{service_id}/deploys"
-        deploy_data = json.dumps({}).encode('utf-8')
-        deploy_req = urllib.request.Request(deploy_url, data=deploy_data, headers=headers, method="POST")
-        try:
-            with urllib.request.urlopen(deploy_req, timeout=15) as resp:
-                if resp.status in (200, 201, 202):
-                    log_message(f"Render API: Successfully triggered redeployment of service {service_id}.")
-                else:
-                    log_message(f"Render API: Received status {resp.status} when triggering deploy.")
-        except Exception as e:
-            log_message(f"Render API: Failed to trigger redeployment: {e}")
-
-    threading.Thread(target=run_update, daemon=True).start()
+    pass
 
 def is_valid_callmebot_target(target):
     t = target.strip()
@@ -2392,37 +2282,7 @@ def _safe_do_post(mock_handler):
     except Exception as e:
         log_message(f"Error in background do_POST handler: {e}")
 
-def check_render_health(config):
-    render_url = os.environ.get("RENDER_EXTERNAL_URL") or config.get("render_external_url")
-    if not render_url:
-        return False, "Render URL not configured"
-    url = render_url.rstrip('/') + "/"
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            status = resp.status
-            if status == 200:
-                print(f"[{datetime.datetime.now()}] Render health check: SUCCEEDED ({url}) - HTTP 200 OK")
-                return True, "HTTP 200 OK"
-            else:
-                print(f"[{datetime.datetime.now()}] Render health check: FAILED ({url}) - HTTP Status {status}")
-                return False, f"HTTP Status {status}"
-    except Exception as e:
-        print(f"[{datetime.datetime.now()}] Render health check: FAILED ({url}) - {e}")
-        return False, str(e)
 
-def check_local_health(config):
-    global LAST_LOCAL_HEARTBEAT
-    if LAST_LOCAL_HEARTBEAT == 0.0:
-        print(f"[{datetime.datetime.now()}] Local health check: FAILED - No heartbeat received yet")
-        return False, "No heartbeat received yet"
-    elapsed = time.time() - LAST_LOCAL_HEARTBEAT
-    if elapsed <= 45.0:
-        print(f"[{datetime.datetime.now()}] Local health check: SUCCEEDED - Heartbeat received {elapsed:.1f}s ago")
-        return True, f"Heartbeat received {elapsed:.1f}s ago"
-    else:
-        print(f"[{datetime.datetime.now()}] Local health check: FAILED - Heartbeat timeout (last seen {elapsed:.1f}s ago)")
-        return False, f"Heartbeat timeout (last seen {elapsed:.1f}s ago)"
 
 # is_current_instance_active is defined at line 166 (Local always returns True).
 # DO NOT redefine it here — the duplicate caused midnight freezes by returning False
@@ -2718,91 +2578,7 @@ def run_long_polling_loop(stop_event):
         except RuntimeError:
             pass
 
-def takeover_failover_loop(stop_event):
-    global PREFERRED_ENV, ACTIVE_ENV, IS_STANDBY, BOTH_DEAD_ALERT_SENT, LAST_API_POLL_SUCCESS, CONFIG_ERROR
-    global LOCAL_CONSECUTIVE_SUCCESS, LOCAL_CONSECUTIVE_FAILURE
-    global RENDER_CONSECUTIVE_SUCCESS, RENDER_CONSECUTIVE_FAILURE
-    
-    log_message("Background takeover/failover loop started.")
-    while not stop_event.is_set():
-        if stop_event.wait(15):
-            break
-            
-        if CONFIG_ERROR:
-            continue
-            
-        config = load_config()
-        is_render = (os.environ.get("RENDER") is not None or os.environ.get("RENDER_SERVICE_ID") is not None)
-        
-        if is_render:
-            # We are Render, target is Local
-            alive, reason = check_local_health(config)
-            if alive:
-                LOCAL_CONSECUTIVE_SUCCESS += 1
-                LOCAL_CONSECUTIVE_FAILURE = 0
-            else:
-                LOCAL_CONSECUTIVE_FAILURE += 1
-                LOCAL_CONSECUTIVE_SUCCESS = 0
-                
-            if PREFERRED_ENV == "Local":
-                if LOCAL_CONSECUTIVE_FAILURE >= 3 and ACTIVE_ENV == "Local":
-                    ACTIVE_ENV = "Render"
-                    IS_STANDBY = False
-                    render_url = os.environ.get("RENDER_EXTERNAL_URL") or config.get("render_external_url")
-                    if render_url:
-                        threading.Thread(target=register_webhook, args=(render_url, config), daemon=True).start()
-                    msg = "⚠️ Local Notifier is offline (3 consecutive timeout checks). Render has automatically taken over monitoring."
-                    log_message(msg)
-                    send_telegram_notification(msg, config)
-                elif LOCAL_CONSECUTIVE_SUCCESS >= 3 and ACTIVE_ENV == "Render":
-                    ACTIVE_ENV = "Local"
-                    IS_STANDBY = True
-                    token = config.get("telegram_bot_token")
-                    if token:
-                        delete_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
-                        try:
-                            req = urllib.request.Request(delete_url, headers={"User-Agent": "Mozilla/5.0"})
-                            with urllib.request.urlopen(req, timeout=3) as resp:
-                                pass
-                        except Exception as e:
-                            log_message(f"Failed to delete webhook: {e}")
-                    msg = "✅ Local Notifier has recovered (3 consecutive successful checks). Render has automatically yielded monitoring back to Local."
-                    log_message(msg)
-                    send_telegram_notification(msg, config)
-            elif PREFERRED_ENV == "Render":
-                if ACTIVE_ENV == "Local":
-                    ACTIVE_ENV = "Render"
-                    IS_STANDBY = False
-                    render_url = os.environ.get("RENDER_EXTERNAL_URL") or config.get("render_external_url")
-                    if render_url:
-                        threading.Thread(target=register_webhook, args=(render_url, config), daemon=True).start()
-                    msg = "🔄 Render is now the active monitoring environment."
-                    log_message(msg)
-                    send_telegram_notification(msg, config)
-        else:
-            # We are Local — NEVER change ACTIVE_ENV away from "Local".
-            # The failover logic previously flipped ACTIVE_ENV to "Render" even on Local,
-            # which caused is_current_instance_active() to return False and froze all threads.
-            ACTIVE_ENV = "Local"
-            IS_STANDBY = False
 
-def local_heartbeat_ping_loop(stop_event):
-    log_message("Local heartbeat ping loop started.")
-    while not stop_event.is_set():
-        is_render = (os.environ.get("RENDER") is not None)
-        if not is_render:
-            config = load_config()
-            render_url = os.environ.get("RENDER_EXTERNAL_URL") or config.get("render_external_url")
-            if render_url and PREFERRED_ENV == "Local":
-                url = f"{render_url.rstrip('/')}/heartbeat"
-                try:
-                    req = urllib.request.Request(url, data=json.dumps({}).encode('utf-8'), method="POST", headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
-                    with urllib.request.urlopen(req, timeout=5) as resp:
-                        resp.read()
-                except Exception as e:
-                    pass
-        if stop_event.wait(15):
-            break
 
 class RequestHandler(http.server.BaseHTTPRequestHandler):
     """HTTP Request Handler exposing REST endpoints."""
@@ -4033,166 +3809,123 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
         return request, client_address
 
 def main():
-    """Entry point — boots Render (webhook) or Local (long polling) mode automatically."""
+    """Entry point — boots pure LOCAL (long polling) mode exclusively."""
     config = load_config()
-    port = config.get("server_port", 8080)
+    port = config.get("server_port", 8085)
     stop_event = threading.Event()
 
-    is_render = (os.environ.get("RENDER") == "true" or os.environ.get("RENDER_SERVICE_ID") is not None)
+    print(f"[{datetime.datetime.now()}] Booting PSA Telegram Notifier in pure LOCAL (long polling) mode.")
 
     # Start background scheduler (interval reports)
-    sched_thread = threading.Thread(target=scheduler_loop, args=(stop_event,), daemon=True)
+    sched_thread = threading.Thread(target=scheduler_loop, args=(stop_event,), daemon=True, name="MonitoringThread")
     sched_thread.start()
 
     # Start pending alert background scheduler
-    sched_thread_2 = threading.Thread(target=pending_alert_scheduler_loop, args=(stop_event,), daemon=True)
+    sched_thread_2 = threading.Thread(target=pending_alert_scheduler_loop, args=(stop_event,), daemon=True, name="PendingAlertThread")
     sched_thread_2.start()
 
     # Start aging alerts background scheduler
-    sched_thread_3 = threading.Thread(target=aging_alerts_scheduler_loop, args=(stop_event,), daemon=True)
+    sched_thread_3 = threading.Thread(target=aging_alerts_scheduler_loop, args=(stop_event,), daemon=True, name="AgingAlertThread")
     sched_thread_3.start()
 
-    if is_render:
-        global IS_STANDBY, ACTIVE_ENV
-        pref_env = config.get("PREFERRED_ENV", "Local")
-        if pref_env == "Local":
-            IS_STANDBY = True
-            ACTIVE_ENV = "Local"
-            print(f"[{datetime.datetime.now()}] Booting in RENDER (STANDBY mode — Primary environment is Local). Webhook disabled.")
-        else:
-            IS_STANDBY = False
-            ACTIVE_ENV = "Render"
-            print(f"[{datetime.datetime.now()}] Booting in RENDER (ACTIVE webhook mode).")
-            register_bot_commands(config)
-            
-            # Register Render Webhook on startup
-            render_url = os.environ.get("RENDER_EXTERNAL_URL") or config.get("render_external_url")
-            if render_url:
-                threading.Thread(target=register_webhook, args=(render_url, config), daemon=True).start()
-        
-        server = ThreadingHTTPServer(('', port), RequestHandler)
-        print(f"[{datetime.datetime.now()}] API server starting on port {port}...")
+    # Release any Telegram Webhook lock by deleting webhook on start (and drop pending updates to clear stale retry queue)
+    token = config.get("telegram_bot_token")
+    if token and "YOUR_TELEGRAM" not in token:
+        delete_url = f"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=true"
         try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            print(f"\n[{datetime.datetime.now()}] KeyboardInterrupt received. Cleaning up...")
-        finally:
-            stop_event.set()
-            server.server_close()
-            print(f"[{datetime.datetime.now()}] Server shut down. Goodbye!")
-    else:
-        print(f"[{datetime.datetime.now()}] Booting in LOCAL (long polling) mode.")
-        
-        # Release Telegram Webhook lock by deleting webhook on start
-        token = config.get("telegram_bot_token")
-        if token and "YOUR_TELEGRAM" not in token:
-            delete_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
-            try:
-                req = urllib.request.Request(delete_url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    print(f"[{datetime.datetime.now()}] Deleted Telegram webhook to enable local long polling.")
-            except Exception as e:
-                print(f"[{datetime.datetime.now()}] Failed to delete webhook: {e}")
-                
-        register_bot_commands(config)
+            req = urllib.request.Request(delete_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                print(f"[{datetime.datetime.now()}] Deleted Telegram webhook and dropped stale updates to enable clean long polling.")
+        except Exception as e:
+            print(f"[{datetime.datetime.now()}] Failed to delete webhook: {e}")
+            
+    register_bot_commands(config)
 
-        # Start long polling thread
-        lp_thread = threading.Thread(target=run_long_polling_loop, args=(stop_event,), daemon=True, name="LongPollingThread")
-        lp_thread.start()
+    # Start long polling thread
+    lp_thread = threading.Thread(target=run_long_polling_loop, args=(stop_event,), daemon=True, name="LongPollingThread")
+    lp_thread.start()
 
-        # Send Telegram startup notification on boot/restart with latest Git version info
-        def send_startup_alert(cfg):
+    # Send Telegram startup notification on boot/restart with latest Git version info
+    def send_startup_alert(cfg):
+        try:
+            now_str = get_local_time(cfg).strftime("%Y-%m-%d %H:%M:%S")
+            git_info = "Unknown"
             try:
-                now_str = get_local_time(cfg).strftime("%Y-%m-%d %H:%M:%S")
-                git_info = "Unknown"
+                import subprocess
+                cmd = ["git", "log", "-1", "--format=%h: %s"]
+                git_info = subprocess.check_output(cmd, cwd=SCRIPT_DIR, text=True, stderr=subprocess.DEVNULL).strip()
+            except Exception:
+                pass
+
+            boot_msg = (
+                f"🚀 *PSA Notifier Online (Pure Local)*\n\n"
+                f"📌 *Version/Commit:* `{git_info}`\n"
+                f"🕒 *Loaded At:* `{now_str}` (Local)\n"
+                f"✅ Single-instance long polling active on port {port}."
+            )
+            send_telegram_notification(boot_msg, cfg)
+        except Exception as e:
+            print(f"[{datetime.datetime.now()}] Failed to send startup alert: {e}")
+
+    threading.Thread(target=send_startup_alert, args=(config,), daemon=True).start()
+
+    def run_long_polling_loop_restart(stop_event):
+        global LONG_POLLING_ACTIVE
+        LONG_POLLING_ACTIVE = False
+        run_long_polling_loop(stop_event)
+
+    def thread_watchdog(stop_event, threads_ref):
+        global LONG_POLLING_ACTIVE, LAST_LONG_POLL_TIME, CURRENT_LONG_POLL_RESPONSE
+        while not stop_event.is_set():
+            if stop_event.wait(15):
+                break
+            elapsed = time.time() - LAST_LONG_POLL_TIME
+            if elapsed > 45.0:
+                log_message(f"⚠️ Long Polling thread stalled ({elapsed:.1f}s > 45s). Closing frozen socket & restarting Long Polling thread...")
                 try:
-                    import subprocess
-                    cmd = ["git", "log", "-1", "--format=%h: %s"]
-                    git_info = subprocess.check_output(cmd, cwd=SCRIPT_DIR, text=True, stderr=subprocess.DEVNULL).strip()
+                    if CURRENT_LONG_POLL_RESPONSE:
+                        CURRENT_LONG_POLL_RESPONSE.close()
                 except Exception:
                     pass
+                CURRENT_LONG_POLL_RESPONSE = None
+                LONG_POLLING_ACTIVE = False
+                lp_t = threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")
+                lp_t.start()
+                threads_ref[3] = ["LongPollingThread", lp_t, lambda: threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")]
 
-                boot_msg = (
-                    f"🚀 *New Version Loaded & Active!*\n\n"
-                    f"📌 *Version/Commit:* `{git_info}`\n"
-                    f"🕒 *Loaded At:* `{now_str}` (Local)\n"
-                    f"✅ All monitoring & auto-healing systems active."
-                )
-                send_telegram_notification(boot_msg, cfg)
-            except Exception as e:
-                print(f"[{datetime.datetime.now()}] Failed to send startup alert: {e}")
+            for i, (name, t, factory) in enumerate(threads_ref):
+                if not t.is_alive():
+                    log_message(f"Thread '{name}' died unexpectedly. Restarting...")
+                    new_t = factory()
+                    new_t.start()
+                    threads_ref[i] = [name, new_t, factory]
 
-        threading.Thread(target=send_startup_alert, args=(config,), daemon=True).start()
+    lp_thread_ref_list = [["LongPollingThread", lp_thread, lambda: threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")]]
+    threads_to_watch = [
+        ["MonitoringThread",   sched_thread,   lambda: threading.Thread(target=scheduler_loop,               args=(stop_event,), daemon=True, name="MonitoringThread")],
+        ["PendingAlertThread", sched_thread_2, lambda: threading.Thread(target=pending_alert_scheduler_loop, args=(stop_event,), daemon=True, name="PendingAlertThread")],
+        ["AgingAlertThread",   sched_thread_3, lambda: threading.Thread(target=aging_alerts_scheduler_loop,  args=(stop_event,), daemon=True, name="AgingAlertThread")],
+    ] + lp_thread_ref_list
 
-        # Internal thread watchdog: monitors all background threads and restarts them if they die
-        def run_long_polling_loop_restart(stop_event):
-            """Wrapper that resets LONG_POLLING_ACTIVE so the thread can be restarted."""
-            global LONG_POLLING_ACTIVE
-            LONG_POLLING_ACTIVE = False
-            run_long_polling_loop(stop_event)
+    wd = threading.Thread(target=thread_watchdog, args=(stop_event, threads_to_watch), daemon=True, name="InternalThreadWatchdog")
+    wd.start()
+    log_message("Internal thread watchdog started (monitors threads every 60s).")
 
-        def thread_watchdog(stop_event, threads_ref):
-            global LONG_POLLING_ACTIVE, LAST_LONG_POLL_TIME, CURRENT_LONG_POLL_RESPONSE
-            while not stop_event.is_set():
-                if stop_event.wait(15):
-                    break
-                is_render = (os.environ.get("RENDER") is not None)
-                if not is_render:
-                    elapsed = time.time() - LAST_LONG_POLL_TIME
-                    if elapsed > 35.0:
-                        log_message(f"⚠️ Long Polling thread stalled ({elapsed:.1f}s > 35s). Closing frozen socket & restarting Long Polling thread...")
-                        try:
-                            if CURRENT_LONG_POLL_RESPONSE:
-                                CURRENT_LONG_POLL_RESPONSE.close()
-                        except Exception:
-                            pass
-                        CURRENT_LONG_POLL_RESPONSE = None
-                        LONG_POLLING_ACTIVE = False
-                        lp_t = threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")
-                        lp_t.start()
-                        threads_ref[3] = ["LongPollingThread", lp_t, lambda: threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")]
+    try:
+        server = ThreadingHTTPServer(('', port), RequestHandler)
+    except OSError as e:
+        log_message(f"CRITICAL: Failed to bind HTTP server to port {port} ({e}). Another instance may be running. Exiting.")
+        sys.exit(1)
 
-                for i, (name, t, factory) in enumerate(threads_ref):
-                    if not t.is_alive():
-                        log_message(f"Thread '{name}' died unexpectedly. Restarting...")
-                        new_t = factory()
-                        new_t.start()
-                        threads_ref[i] = [name, new_t, factory]
-
-        lp_thread_ref_list = [["LongPollingThread", lp_thread, lambda: threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")]]
-        threads_to_watch = [
-            ["MonitoringThread",   sched_thread,   lambda: threading.Thread(target=scheduler_loop,               args=(stop_event,), daemon=True, name="MonitoringThread")],
-            ["PendingAlertThread", sched_thread_2, lambda: threading.Thread(target=pending_alert_scheduler_loop, args=(stop_event,), daemon=True, name="PendingAlertThread")],
-            ["AgingAlertThread",   sched_thread_3, lambda: threading.Thread(target=aging_alerts_scheduler_loop,  args=(stop_event,), daemon=True, name="AgingAlertThread")],
-        ] + lp_thread_ref_list
-
-        wd = threading.Thread(target=thread_watchdog, args=(stop_event, threads_to_watch), daemon=True, name="InternalThreadWatchdog")
-        wd.start()
-        log_message("Internal thread watchdog started (monitors threads every 60s).")
-
-        bound = False
-        for try_port in [port, 8085, 8086, 8087, 8088]:
-            try:
-                server = ThreadingHTTPServer(('', try_port), RequestHandler)
-                bound = True
-                port = try_port
-                break
-            except OSError as e:
-                log_message(f"Port {try_port} binding failed ({e}). Trying fallback port...")
-        
-        if not bound:
-            log_message("CRITICAL: Failed to bind HTTP server to any port.")
-            return
-
-        print(f"[{datetime.datetime.now()}] Local API server starting on port {port}...")
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            print(f"\n[{datetime.datetime.now()}] KeyboardInterrupt received. Cleaning up...")
-        finally:
-            stop_event.set()
-            server.server_close()
-            print(f"[{datetime.datetime.now()}] Server shut down. Goodbye!")
+    print(f"[{datetime.datetime.now()}] Local API server starting on port {port}...")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print(f"\n[{datetime.datetime.now()}] KeyboardInterrupt received. Cleaning up...")
+    finally:
+        stop_event.set()
+        server.server_close()
+        print(f"[{datetime.datetime.now()}] Server shut down. Goodbye!")
 
 
 if __name__ == '__main__':

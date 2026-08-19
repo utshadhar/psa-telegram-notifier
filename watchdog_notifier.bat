@@ -22,6 +22,7 @@ echo [%DATE% %TIME%] WATCHDOG: Bot health FAILED (code=%HEALTH%). Pulling latest
 git checkout conv_state.json >nul 2>&1
 git pull origin main >> "%LOG%" 2>&1
 
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8085,8089 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }" >nul 2>&1
 taskkill /f /im python.exe >nul 2>&1
 taskkill /f /im pythonw.exe >nul 2>&1
 timeout /t 2 /nobreak >nul
