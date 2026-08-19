@@ -3941,8 +3941,6 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     ok, err = send_telegram_notification(msg, cfg)
                                     if not ok:
                                         LAST_WEBHOOK_ERROR = f"Failed to send Telegram notification: {err}"
-                                    else:
-                                        check_and_send_pending_alert(b_date, cfg)
                                 except Exception:
                                     import traceback
                                     LAST_WEBHOOK_ERROR = f"Thread Exception: {traceback.format_exc()}"
