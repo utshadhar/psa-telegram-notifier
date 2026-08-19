@@ -1292,5 +1292,160 @@ class TestPSATelegramNotifier(unittest.TestCase):
         self.assertEqual(so_uid, "TX_CERAMICS_101")
         self.assertEqual(co_uid, "PAY_CERAMICS_202")
 
+    def test_authoritative_state_machine_f3_none_flow(self):
+        """Test Authoritative Business State Machine: None branch for /f3."""
+        class MockReqHandler(notifier.RequestHandler):
+            def __init__(self):
+                self.headers = {}
+                self.rfile = None
+                self.path = '/webhook'
+            def send_json_response(self, code, body):
+                pass
+
+        with patch('notifier.load_config', return_value={"telegram_chat_id": "999"}), \
+             patch('notifier.send_telegram_notification') as mock_send:
+            handler = MockReqHandler()
+
+            def send_msg(text):
+                import io
+                payload = {"message": {"chat": {"id": 999}, "text": text}}
+                body = json.dumps(payload).encode('utf-8')
+                handler.headers = {'Content-Length': str(len(body))}
+                handler.rfile = io.BytesIO(body)
+                handler.do_POST()
+
+            # Path 1: /f3 -> None -> No -> OFF
+            notifier.set_user_conv_state("999", None)
+            send_msg("/f3")
+            self.assertEqual(notifier.get_user_conv_state("999"), "SELECT_MODE_F3")
+            
+            send_msg("none")
+            self.assertEqual(notifier.get_user_conv_state("999"), "AWAITING_NONE_CONFIRM_F3")
+            
+            send_msg("no")
+            self.assertIsNone(notifier.get_user_conv_state("999"))
+            self.assertEqual(notifier.OBD_PENDING_THRESHOLD_MINUTES, 0)
+            mock_send.assert_called_with("obd_pending_threshold_minutes checker is off.", {"telegram_chat_id": "999"})
+
+            # Path 2: /f3 -> None -> Yes -> Default -> ON
+            notifier.OBD_PENDING_THRESHOLD_MINUTES_DEFAULT = 25
+            send_msg("/f3")
+            send_msg("none")
+            send_msg("yes")
+            self.assertEqual(notifier.get_user_conv_state("999"), "AWAITING_ENABLE_MODE_F3")
+            send_msg("default")
+            self.assertIsNone(notifier.get_user_conv_state("999"))
+            self.assertEqual(notifier.OBD_PENDING_THRESHOLD_MINUTES, 25)
+
+    def test_authoritative_state_machine_f3_default_flow(self):
+        """Test Authoritative Business State Machine: Default branch for /f3."""
+        class MockReqHandler(notifier.RequestHandler):
+            def __init__(self):
+                self.headers = {}
+                self.rfile = None
+                self.path = '/webhook'
+            def send_json_response(self, code, body):
+                pass
+
+        with patch('notifier.load_config', return_value={"telegram_chat_id": "999"}), \
+             patch('notifier.send_telegram_notification') as mock_send:
+            handler = MockReqHandler()
+
+            def send_msg(text):
+                import io
+                payload = {"message": {"chat": {"id": 999}, "text": text}}
+                body = json.dumps(payload).encode('utf-8')
+                handler.headers = {'Content-Length': str(len(body))}
+                handler.rfile = io.BytesIO(body)
+                handler.do_POST()
+
+            # Path 1: /f3 -> Default -> 15 -> No -> Unchanged
+            notifier.set_user_conv_state("999", None)
+            notifier.OBD_PENDING_THRESHOLD_MINUTES = 0
+            send_msg("/f3")
+            send_msg("default")
+            self.assertEqual(notifier.get_user_conv_state("999"), "AWAITING_DEFAULT_VAL_F3")
+            send_msg("15")
+            self.assertEqual(notifier.get_user_conv_state("999"), "AWAITING_DEFAULT_ON_CONFIRM_F3")
+            self.assertEqual(notifier.OBD_PENDING_THRESHOLD_MINUTES_DEFAULT, 15)
+            send_msg("no")
+            self.assertIsNone(notifier.get_user_conv_state("999"))
+            self.assertEqual(notifier.OBD_PENDING_THRESHOLD_MINUTES, 0)
+
+            # Path 2: /f3 -> Default -> 18 -> Yes -> Default -> ON
+            send_msg("/f3")
+            send_msg("default")
+            send_msg("18")
+            send_msg("yes")
+            self.assertEqual(notifier.get_user_conv_state("999"), "AWAITING_ENABLE_MODE_F3")
+            send_msg("default")
+            self.assertIsNone(notifier.get_user_conv_state("999"))
+            self.assertEqual(notifier.OBD_PENDING_THRESHOLD_MINUTES, 18)
+
+    def test_authoritative_state_machine_f10_ceramics_flow(self):
+        """Test Authoritative Business State Machine: /f10 Ceramics SO."""
+        class MockReqHandler(notifier.RequestHandler):
+            def __init__(self):
+                self.headers = {}
+                self.rfile = None
+                self.path = '/webhook'
+            def send_json_response(self, code, body):
+                pass
+
+        with patch('notifier.load_config', return_value={"telegram_chat_id": "999"}), \
+             patch('notifier.send_telegram_notification') as mock_send:
+            handler = MockReqHandler()
+
+            def send_msg(text):
+                import io
+                payload = {"message": {"chat": {"id": 999}, "text": text}}
+                body = json.dumps(payload).encode('utf-8')
+                handler.headers = {'Content-Length': str(len(body))}
+                handler.rfile = io.BytesIO(body)
+                handler.do_POST()
+
+            # Path: /f10 -> Current -> 20 -> Yes -> Current -> ON
+            notifier.set_user_conv_state("999", None)
+            send_msg("/f10")
+            self.assertEqual(notifier.get_user_conv_state("999"), "SELECT_MODE_F10")
+            send_msg("current")
+            self.assertEqual(notifier.get_user_conv_state("999"), "AWAITING_CURRENT_VAL_F10")
+            send_msg("20")
+            self.assertEqual(notifier.get_user_conv_state("999"), "AWAITING_CURRENT_ON_CONFIRM_F10")
+            send_msg("yes")
+            self.assertEqual(notifier.get_user_conv_state("999"), "AWAITING_ENABLE_MODE_F10")
+            send_msg("current")
+            self.assertIsNone(notifier.get_user_conv_state("999"))
+            self.assertEqual(notifier.CERAMICS_SO_PENDING_THRESHOLD_MINUTES, 20)
+
+            # Test /o10 disabling
+            send_msg("/o10")
+            self.assertEqual(notifier.CERAMICS_SO_PENDING_THRESHOLD_MINUTES, 0)
+            mock_send.assert_called_with("ceramics_so_pending_threshold_minutes checker is off.", {"telegram_chat_id": "999"})
+
+    def test_scheduled_check_deduplication(self):
+        """Test that run_scheduled_check avoids duplicate dispatches within the same minute."""
+        with patch('notifier.fetch_all_apis', return_value={}) as mock_fetch, \
+             patch('notifier.format_telegram_message', return_value="test"), \
+             patch('notifier.send_telegram_notification', return_value=(True, None)) as mock_send, \
+             patch('notifier.check_and_send_pending_alert'):
+            
+            # Reset minute key
+            notifier.LAST_SCHEDULED_RUN_KEY = None
+            res1 = notifier.run_scheduled_check(force=False)
+            self.assertTrue(res1)
+            self.assertEqual(mock_send.call_count, 1)
+
+            # Second call in same minute should be skipped
+            res2 = notifier.run_scheduled_check(force=False)
+            self.assertTrue(res2)
+            self.assertEqual(mock_send.call_count, 1)
+
+            # Force call should still run
+            res3 = notifier.run_scheduled_check(force=True)
+            self.assertTrue(res3)
+            self.assertEqual(mock_send.call_count, 2)
+
 if __name__ == '__main__':
     unittest.main()
+

@@ -121,6 +121,8 @@ STATE_FILE = os.path.join(SCRIPT_DIR, "conv_state.json")
 
 PROCESSED_UPDATE_IDS = set()
 PROCESSED_LOCK = threading.Lock()
+CONVERSATION_STATES = {}
+CONV_STATE_LOCK = threading.Lock()
 
 def is_duplicate_update(update):
     global PROCESSED_UPDATE_IDS
@@ -145,29 +147,65 @@ def is_duplicate_update(update):
         if unique_key in PROCESSED_UPDATE_IDS:
             return True
         PROCESSED_UPDATE_IDS.add(unique_key)
-        if len(PROCESSED_UPDATE_IDS) > 2000:
-            PROCESSED_UPDATE_IDS = set(list(PROCESSED_UPDATE_IDS)[-1000:])
+        if len(PROCESSED_UPDATE_IDS) > 5000:
+            PROCESSED_UPDATE_IDS = set(list(PROCESSED_UPDATE_IDS)[-2500:])
         return False
+
+def get_user_conv_state(chat_id):
+    with CONV_STATE_LOCK:
+        cid = str(chat_id)
+        data = CONVERSATION_STATES.get(cid, {})
+        return data.get("state")
+
+def get_user_entered_vals(chat_id):
+    with CONV_STATE_LOCK:
+        cid = str(chat_id)
+        data = CONVERSATION_STATES.get(cid, {})
+        return dict(data.get("entered_vals", {}))
+
+def set_user_conv_state(chat_id, state, entered_vals=None):
+    global USER_CONVERSATION_STATE, ENTERED_CURRENT_VALS
+    with CONV_STATE_LOCK:
+        cid = str(chat_id)
+        if state is None:
+            CONVERSATION_STATES.pop(cid, None)
+            USER_CONVERSATION_STATE = None
+        else:
+            if cid not in CONVERSATION_STATES:
+                CONVERSATION_STATES[cid] = {"state": state, "entered_vals": {}, "updated_at": time.time()}
+            else:
+                CONVERSATION_STATES[cid]["state"] = state
+                CONVERSATION_STATES[cid]["updated_at"] = time.time()
+            if entered_vals is not None:
+                CONVERSATION_STATES[cid]["entered_vals"] = entered_vals
+            USER_CONVERSATION_STATE = state
+            ENTERED_CURRENT_VALS = CONVERSATION_STATES[cid].get("entered_vals", {})
+    save_conv_state()
 
 def save_conv_state():
     try:
-        data = {
-            "USER_CONVERSATION_STATE": USER_CONVERSATION_STATE,
-            "ENTERED_CURRENT_VALS": ENTERED_CURRENT_VALS
-        }
-        with open(STATE_FILE, "w") as f:
+        with CONV_STATE_LOCK:
+            data = {
+                "CONVERSATION_STATES": CONVERSATION_STATES,
+                "USER_CONVERSATION_STATE": USER_CONVERSATION_STATE,
+                "ENTERED_CURRENT_VALS": ENTERED_CURRENT_VALS
+            }
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f)
     except Exception:
         pass
 
 def load_conv_state():
-    global USER_CONVERSATION_STATE, ENTERED_CURRENT_VALS
+    global USER_CONVERSATION_STATE, ENTERED_CURRENT_VALS, CONVERSATION_STATES
     try:
         if os.path.exists(STATE_FILE):
-            with open(STATE_FILE, "r") as f:
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                USER_CONVERSATION_STATE = data.get("USER_CONVERSATION_STATE")
-                ENTERED_CURRENT_VALS = data.get("ENTERED_CURRENT_VALS", {})
+                with CONV_STATE_LOCK:
+                    if "CONVERSATION_STATES" in data and isinstance(data["CONVERSATION_STATES"], dict):
+                        CONVERSATION_STATES = data["CONVERSATION_STATES"]
+                    USER_CONVERSATION_STATE = data.get("USER_CONVERSATION_STATE")
+                    ENTERED_CURRENT_VALS = data.get("ENTERED_CURRENT_VALS", {})
     except Exception:
         pass
 
@@ -344,6 +382,8 @@ def load_thresholds():
         "SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT": 30,
         "FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT": 15,
         "FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT": 10,
+        "CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT": 15,
+        "CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT": 10,
         "OBD_OFFHOURS_START_HOUR_DEFAULT": 0,
         "OBD_OFFHOURS_END_HOUR_DEFAULT": 0,
         "F1_START_HOUR_DEFAULT": 0, "F1_END_HOUR_DEFAULT": 0,
@@ -355,6 +395,8 @@ def load_thresholds():
         "F7_START_HOUR_DEFAULT": 0, "F7_END_HOUR_DEFAULT": 0,
         "F8_START_HOUR_DEFAULT": 0, "F8_END_HOUR_DEFAULT": 0,
         "F9_START_HOUR_DEFAULT": 0, "F9_END_HOUR_DEFAULT": 0,
+        "F10_START_HOUR_DEFAULT": 0, "F10_END_HOUR_DEFAULT": 0,
+        "F11_START_HOUR_DEFAULT": 0, "F11_END_HOUR_DEFAULT": 0,
         "CALLMEBOT_USER_DEFAULT": "@UshDhar, +8801838262248",
         
         "PSA_SO_PENDING_THRESHOLD_MINUTES": None,
@@ -366,6 +408,8 @@ def load_thresholds():
         "SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES": None,
         "FRESHLPG_SO_PENDING_THRESHOLD_MINUTES": None,
         "FRESHLPG_CO_PENDING_THRESHOLD_MINUTES": None,
+        "CERAMICS_SO_PENDING_THRESHOLD_MINUTES": None,
+        "CERAMICS_CO_PENDING_THRESHOLD_MINUTES": None,
         "OBD_OFFHOURS_START_HOUR": None,
         "OBD_OFFHOURS_END_HOUR": None,
         "F1_START_HOUR": None, "F1_END_HOUR": None,
@@ -377,6 +421,8 @@ def load_thresholds():
         "F7_START_HOUR": None, "F7_END_HOUR": None,
         "F8_START_HOUR": None, "F8_END_HOUR": None,
         "F9_START_HOUR": None, "F9_END_HOUR": None,
+        "F10_START_HOUR": None, "F10_END_HOUR": None,
+        "F11_START_HOUR": None, "F11_END_HOUR": None,
         "CALLMEBOT_USER": None,
         
         "PREFERRED_ENV": "Local"
@@ -393,6 +439,8 @@ def load_thresholds():
         "SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES": "SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT",
         "FRESHLPG_SO_PENDING_THRESHOLD_MINUTES": "FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT",
         "FRESHLPG_CO_PENDING_THRESHOLD_MINUTES": "FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT",
+        "CERAMICS_SO_PENDING_THRESHOLD_MINUTES": "CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT",
+        "CERAMICS_CO_PENDING_THRESHOLD_MINUTES": "CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT",
         "OBD_OFFHOURS_START_HOUR": "OBD_OFFHOURS_START_HOUR_DEFAULT",
         "OBD_OFFHOURS_END_HOUR": "OBD_OFFHOURS_END_HOUR_DEFAULT",
         "CALLMEBOT_USER": "CALLMEBOT_USER_DEFAULT"
@@ -436,6 +484,8 @@ def load_thresholds():
     SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT = defaults["SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT"]
     FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT = defaults["FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT"]
     FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT = defaults["FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT"]
+    CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT = defaults["CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT"]
+    CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT = defaults["CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT"]
     OBD_OFFHOURS_START_HOUR_DEFAULT = defaults["OBD_OFFHOURS_START_HOUR_DEFAULT"]
     OBD_OFFHOURS_END_HOUR_DEFAULT = defaults["OBD_OFFHOURS_END_HOUR_DEFAULT"]
     
@@ -448,6 +498,8 @@ def load_thresholds():
     F7_START_HOUR_DEFAULT = OBD_OFFHOURS_START_HOUR_DEFAULT; F7_END_HOUR_DEFAULT = OBD_OFFHOURS_END_HOUR_DEFAULT
     F8_START_HOUR_DEFAULT = defaults["F8_START_HOUR_DEFAULT"]; F8_END_HOUR_DEFAULT = defaults["F8_END_HOUR_DEFAULT"]
     F9_START_HOUR_DEFAULT = defaults["F9_START_HOUR_DEFAULT"]; F9_END_HOUR_DEFAULT = defaults["F9_END_HOUR_DEFAULT"]
+    F10_START_HOUR_DEFAULT = defaults["F10_START_HOUR_DEFAULT"]; F10_END_HOUR_DEFAULT = defaults["F10_END_HOUR_DEFAULT"]
+    F11_START_HOUR_DEFAULT = defaults["F11_START_HOUR_DEFAULT"]; F11_END_HOUR_DEFAULT = defaults["F11_END_HOUR_DEFAULT"]
     
     CALLMEBOT_USER_DEFAULT = defaults["CALLMEBOT_USER_DEFAULT"]
     PREFERRED_ENV = defaults["PREFERRED_ENV"]
@@ -465,6 +517,8 @@ def load_thresholds():
     SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES = defaults["SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES"] if defaults["SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES"] is not None else SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT
     FRESHLPG_SO_PENDING_THRESHOLD_MINUTES = defaults["FRESHLPG_SO_PENDING_THRESHOLD_MINUTES"] if defaults["FRESHLPG_SO_PENDING_THRESHOLD_MINUTES"] is not None else FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT
     FRESHLPG_CO_PENDING_THRESHOLD_MINUTES = defaults["FRESHLPG_CO_PENDING_THRESHOLD_MINUTES"] if defaults["FRESHLPG_CO_PENDING_THRESHOLD_MINUTES"] is not None else FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
+    CERAMICS_SO_PENDING_THRESHOLD_MINUTES = defaults["CERAMICS_SO_PENDING_THRESHOLD_MINUTES"] if defaults["CERAMICS_SO_PENDING_THRESHOLD_MINUTES"] is not None else CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT
+    CERAMICS_CO_PENDING_THRESHOLD_MINUTES = defaults["CERAMICS_CO_PENDING_THRESHOLD_MINUTES"] if defaults["CERAMICS_CO_PENDING_THRESHOLD_MINUTES"] is not None else CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
     OBD_OFFHOURS_START_HOUR = defaults["OBD_OFFHOURS_START_HOUR"] if defaults["OBD_OFFHOURS_START_HOUR"] is not None else OBD_OFFHOURS_START_HOUR_DEFAULT
     OBD_OFFHOURS_END_HOUR = defaults["OBD_OFFHOURS_END_HOUR"] if defaults["OBD_OFFHOURS_END_HOUR"] is not None else OBD_OFFHOURS_END_HOUR_DEFAULT
     
@@ -485,6 +539,10 @@ def load_thresholds():
     F8_END_HOUR = defaults["F8_END_HOUR"] if defaults["F8_END_HOUR"] is not None else F8_END_HOUR_DEFAULT
     F9_START_HOUR = defaults["F9_START_HOUR"] if defaults["F9_START_HOUR"] is not None else F9_START_HOUR_DEFAULT
     F9_END_HOUR = defaults["F9_END_HOUR"] if defaults["F9_END_HOUR"] is not None else F9_END_HOUR_DEFAULT
+    F10_START_HOUR = defaults["F10_START_HOUR"] if defaults["F10_START_HOUR"] is not None else F10_START_HOUR_DEFAULT
+    F10_END_HOUR = defaults["F10_END_HOUR"] if defaults["F10_END_HOUR"] is not None else F10_END_HOUR_DEFAULT
+    F11_START_HOUR = defaults["F11_START_HOUR"] if defaults["F11_START_HOUR"] is not None else F11_START_HOUR_DEFAULT
+    F11_END_HOUR = defaults["F11_END_HOUR"] if defaults["F11_END_HOUR"] is not None else F11_END_HOUR_DEFAULT
     CALLMEBOT_USER = defaults["CALLMEBOT_USER"] if defaults["CALLMEBOT_USER"] is not None else CALLMEBOT_USER_DEFAULT
 
     load_conv_state()
@@ -513,6 +571,7 @@ def save_thresholds():
     global CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
     global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT, OBD_OFFHOURS_START_HOUR_DEFAULT, OBD_OFFHOURS_END_HOUR_DEFAULT
     global FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
+    global CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT, CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT
     global CALLMEBOT_USER_DEFAULT
     global PREFERRED_ENV
 
@@ -521,6 +580,12 @@ def save_thresholds():
     global CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES
     global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES, OBD_OFFHOURS_START_HOUR, OBD_OFFHOURS_END_HOUR
     global FRESHLPG_SO_PENDING_THRESHOLD_MINUTES, FRESHLPG_CO_PENDING_THRESHOLD_MINUTES
+    global CERAMICS_SO_PENDING_THRESHOLD_MINUTES, CERAMICS_CO_PENDING_THRESHOLD_MINUTES
+    global F1_START_HOUR, F1_END_HOUR, F2_START_HOUR, F2_END_HOUR, F3_START_HOUR, F3_END_HOUR
+    global F4_START_HOUR, F4_END_HOUR, F5_START_HOUR, F5_END_HOUR, F6_START_HOUR, F6_END_HOUR
+    global F7_START_HOUR, F7_END_HOUR, F8_START_HOUR, F8_END_HOUR, F9_START_HOUR, F9_END_HOUR
+    global F10_START_HOUR, F10_END_HOUR, F11_START_HOUR, F11_END_HOUR
+    global F10_START_HOUR_DEFAULT, F10_END_HOUR_DEFAULT, F11_START_HOUR_DEFAULT, F11_END_HOUR_DEFAULT
     global CALLMEBOT_USER
 
     thresholds = {
@@ -533,6 +598,8 @@ def save_thresholds():
         "SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES": SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES,
         "FRESHLPG_SO_PENDING_THRESHOLD_MINUTES": FRESHLPG_SO_PENDING_THRESHOLD_MINUTES,
         "FRESHLPG_CO_PENDING_THRESHOLD_MINUTES": FRESHLPG_CO_PENDING_THRESHOLD_MINUTES,
+        "CERAMICS_SO_PENDING_THRESHOLD_MINUTES": CERAMICS_SO_PENDING_THRESHOLD_MINUTES,
+        "CERAMICS_CO_PENDING_THRESHOLD_MINUTES": CERAMICS_CO_PENDING_THRESHOLD_MINUTES,
         "OBD_OFFHOURS_START_HOUR": OBD_OFFHOURS_START_HOUR,
         "OBD_OFFHOURS_END_HOUR": OBD_OFFHOURS_END_HOUR,
         "F1_START_HOUR": F1_START_HOUR, "F1_END_HOUR": F1_END_HOUR,
@@ -544,6 +611,8 @@ def save_thresholds():
         "F7_START_HOUR": OBD_OFFHOURS_START_HOUR, "F7_END_HOUR": OBD_OFFHOURS_END_HOUR,
         "F8_START_HOUR": F8_START_HOUR, "F8_END_HOUR": F8_END_HOUR,
         "F9_START_HOUR": F9_START_HOUR, "F9_END_HOUR": F9_END_HOUR,
+        "F10_START_HOUR": F10_START_HOUR, "F10_END_HOUR": F10_END_HOUR,
+        "F11_START_HOUR": F11_START_HOUR, "F11_END_HOUR": F11_END_HOUR,
         "CALLMEBOT_USER": CALLMEBOT_USER,
 
         "PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT": PSA_SO_PENDING_THRESHOLD_MINUTES_DEFAULT,
@@ -555,6 +624,8 @@ def save_thresholds():
         "SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT": SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES_DEFAULT,
         "FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT": FRESHLPG_SO_PENDING_THRESHOLD_MINUTES_DEFAULT,
         "FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT": FRESHLPG_CO_PENDING_THRESHOLD_MINUTES_DEFAULT,
+        "CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT": CERAMICS_SO_PENDING_THRESHOLD_MINUTES_DEFAULT,
+        "CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT": CERAMICS_CO_PENDING_THRESHOLD_MINUTES_DEFAULT,
         "OBD_OFFHOURS_START_HOUR_DEFAULT": OBD_OFFHOURS_START_HOUR_DEFAULT,
         "OBD_OFFHOURS_END_HOUR_DEFAULT": OBD_OFFHOURS_END_HOUR_DEFAULT,
         "F1_START_HOUR_DEFAULT": F1_START_HOUR_DEFAULT, "F1_END_HOUR_DEFAULT": F1_END_HOUR_DEFAULT,
@@ -566,6 +637,8 @@ def save_thresholds():
         "F7_START_HOUR_DEFAULT": OBD_OFFHOURS_START_HOUR_DEFAULT, "F7_END_HOUR_DEFAULT": OBD_OFFHOURS_END_HOUR_DEFAULT,
         "F8_START_HOUR_DEFAULT": F8_START_HOUR_DEFAULT, "F8_END_HOUR_DEFAULT": F8_END_HOUR_DEFAULT,
         "F9_START_HOUR_DEFAULT": F9_START_HOUR_DEFAULT, "F9_END_HOUR_DEFAULT": F9_END_HOUR_DEFAULT,
+        "F10_START_HOUR_DEFAULT": F10_START_HOUR_DEFAULT, "F10_END_HOUR_DEFAULT": F10_END_HOUR_DEFAULT,
+        "F11_START_HOUR_DEFAULT": F11_START_HOUR_DEFAULT, "F11_END_HOUR_DEFAULT": F11_END_HOUR_DEFAULT,
         "CALLMEBOT_USER_DEFAULT": CALLMEBOT_USER_DEFAULT,
         "PREFERRED_ENV": PREFERRED_ENV
     }
@@ -1033,9 +1106,12 @@ def track_and_alert_aging(tx_id, server, process_type, api_name, config):
     global CEMENTAPI_SO_PENDING_THRESHOLD_MINUTES, CEMENTAPI_CO_PENDING_THRESHOLD_MINUTES
     global CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES
     global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES, OBD_OFFHOURS_START_HOUR, OBD_OFFHOURS_END_HOUR
+    global FRESHLPG_SO_PENDING_THRESHOLD_MINUTES, FRESHLPG_CO_PENDING_THRESHOLD_MINUTES
+    global CERAMICS_SO_PENDING_THRESHOLD_MINUTES, CERAMICS_CO_PENDING_THRESHOLD_MINUTES
     global F1_START_HOUR, F1_END_HOUR, F2_START_HOUR, F2_END_HOUR, F3_START_HOUR, F3_END_HOUR
     global F4_START_HOUR, F4_END_HOUR, F5_START_HOUR, F5_END_HOUR, F6_START_HOUR, F6_END_HOUR
     global F7_START_HOUR, F7_END_HOUR, F8_START_HOUR, F8_END_HOUR, F9_START_HOUR, F9_END_HOUR
+    global F10_START_HOUR, F10_END_HOUR, F11_START_HOUR, F11_END_HOUR
     
     current_time = get_local_time(config)
     
@@ -2097,12 +2173,23 @@ def register_webhook(public_url, config):
     except Exception as e:
         print(f"[{datetime.datetime.now()}] Failed to register webhook: {e}")
 
+LAST_SCHEDULED_RUN_KEY = None
+SCHEDULED_RUN_LOCK = threading.Lock()
+
 def run_scheduled_check(business_date=None, force=False):
     """Retrieves config, fetches pending data, and dispatches to Telegram if active or forced."""
-    global LAST_API_POLL_SUCCESS
+    global LAST_API_POLL_SUCCESS, LAST_SCHEDULED_RUN_KEY
     config = load_config()
+    local_now = get_local_time(config)
+    run_key = local_now.strftime("%Y-%m-%d %H:%M")
+    
+    with SCHEDULED_RUN_LOCK:
+        if not force and LAST_SCHEDULED_RUN_KEY == run_key:
+            print(f"[{datetime.datetime.now()}] Scheduled check already ran for minute {run_key}. Skipping duplicate.")
+            return True
+        LAST_SCHEDULED_RUN_KEY = run_key
+
     if business_date is None:
-        local_now = get_local_time(config)
         business_date, active = get_business_date_and_active(
             local_now,
             config.get("monitoring_start_hour", 9),
@@ -2111,8 +2198,6 @@ def run_scheduled_check(business_date=None, force=False):
         if not active and not force:
             print(f"[{datetime.datetime.now()}] Outside monitoring hours and force=False. Check skipped.")
             return False
-
-    local_now = get_local_time(config)
 
     try:
         stats = fetch_all_apis(business_date, config)
@@ -2141,6 +2226,7 @@ def aging_alerts_scheduler_loop(stop_event):
         global CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES
         global SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES, OBD_OFFHOURS_START_HOUR, OBD_OFFHOURS_END_HOUR
         global FRESHLPG_SO_PENDING_THRESHOLD_MINUTES, FRESHLPG_CO_PENDING_THRESHOLD_MINUTES
+        global CERAMICS_SO_PENDING_THRESHOLD_MINUTES, CERAMICS_CO_PENDING_THRESHOLD_MINUTES
         global LAST_API_POLL_SUCCESS
         
         if (PSA_SO_PENDING_THRESHOLD_MINUTES <= 0 and 
@@ -2151,7 +2237,9 @@ def aging_alerts_scheduler_loop(stop_event):
             CONTRACTAPI_CO_PENDING_THRESHOLD_MINUTES <= 0 and
             SMARTSALES_OBD_OFFHOURS_THRESHOLD_MINUTES <= 0 and
             FRESHLPG_SO_PENDING_THRESHOLD_MINUTES <= 0 and
-            FRESHLPG_CO_PENDING_THRESHOLD_MINUTES <= 0):
+            FRESHLPG_CO_PENDING_THRESHOLD_MINUTES <= 0 and
+            CERAMICS_SO_PENDING_THRESHOLD_MINUTES <= 0 and
+            CERAMICS_CO_PENDING_THRESHOLD_MINUTES <= 0):
             continue
             
         config = load_config()
@@ -2554,74 +2642,76 @@ def telegram_api_call(method, payload, config):
         print(f"[{datetime.datetime.now()}] Telegram API call {method} failed: {e}")
         return None
 
-def start_feature_conversation(handler, feat_key, config):
-    global USER_CONVERSATION_STATE
-    USER_CONVERSATION_STATE = f"SELECT_MODE_{feat_key.upper()}"
-    save_conv_state()
+def start_feature_conversation(handler, feat_key, config, chat_id=None):
+    if not chat_id:
+        chat_id = str(config.get("telegram_chat_id", ""))
+    state = f"SELECT_MODE_{feat_key.upper()}"
+    set_user_conv_state(chat_id, state)
     meta = CONV_FEATURE_MAP[feat_key]
     msg = f"Update options for {meta['label']}:"
-    reply_markup = {
-        "inline_keyboard": [
-            [
-                {"text": "Default", "callback_data": "default"},
-                {"text": "Current", "callback_data": "current"},
-                {"text": "None", "callback_data": "none"}
-            ]
-        ]
-    }
+    reply_markup = get_options_inline_keyboard()
     send_telegram_notification(msg, config, reply_markup=reply_markup)
     handler.send_json_response(200, {"status": "ok", "message": msg})
 
 def handle_feature_trigger(handler, feat_key, config):
     start_feature_conversation(handler, feat_key, config)
 
+LONG_POLLING_LOCK = threading.Lock()
+
 def run_long_polling_loop(stop_event):
     global LONG_POLLING_ACTIVE, IS_STANDBY, ACTIVE_ENV, LAST_LONG_POLL_TIME, LAST_TELEGRAM_OFFSET, CURRENT_LONG_POLL_RESPONSE
-    if LONG_POLLING_ACTIVE:
+    if not LONG_POLLING_LOCK.acquire(blocking=False):
+        log_message("Long polling loop already active on another thread. Skipping duplicate spawn.")
         return
-    LONG_POLLING_ACTIVE = True
-    log_message("Telegram Long Polling thread started.")
-    
-    while not stop_event.is_set():
-        try:
-            LAST_LONG_POLL_TIME = time.time()
-            is_render = (os.environ.get("RENDER") is not None or os.environ.get("RENDER_SERVICE_ID") is not None)
-            if is_render:
-                time.sleep(2)
-                continue
-                
-            config = load_config()
-            token = config.get("telegram_bot_token")
-            if not token:
-                time.sleep(5)
-                continue
-                
-            url = f"https://api.telegram.org/bot{token}/getUpdates?offset={LAST_TELEGRAM_OFFSET}&timeout=10"
+    try:
+        LONG_POLLING_ACTIVE = True
+        log_message("Telegram Long Polling thread started.")
+        
+        while not stop_event.is_set():
             try:
-                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Connection": "close"})
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    CURRENT_LONG_POLL_RESPONSE = resp
-                    res = json.loads(resp.read().decode('utf-8'))
+                LAST_LONG_POLL_TIME = time.time()
+                is_render = (os.environ.get("RENDER") is not None or os.environ.get("RENDER_SERVICE_ID") is not None)
+                if is_render:
+                    time.sleep(2)
+                    continue
+                    
+                config = load_config()
+                token = config.get("telegram_bot_token")
+                if not token:
+                    time.sleep(5)
+                    continue
+                    
+                url = f"https://api.telegram.org/bot{token}/getUpdates?offset={LAST_TELEGRAM_OFFSET}&timeout=10"
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Connection": "close"})
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        CURRENT_LONG_POLL_RESPONSE = resp
+                        res = json.loads(resp.read().decode('utf-8'))
+                        CURRENT_LONG_POLL_RESPONSE = None
+                        if res.get("ok"):
+                            for update in res.get("result", []):
+                                up_id = update.get("update_id", 0)
+                                if up_id >= LAST_TELEGRAM_OFFSET:
+                                    LAST_TELEGRAM_OFFSET = up_id + 1
+                                message = update.get("message") or update.get("edited_message") or update.get("callback_query")
+                                if message:
+                                    process_long_poll_update(update, config)
+                        elif res.get("error_code") == 409:
+                            log_message("Telegram 409 Conflict detected. Waiting 5s for stale connections to clear...")
+                            time.sleep(5)
+                except Exception as e:
                     CURRENT_LONG_POLL_RESPONSE = None
-                    if res.get("ok"):
-                        for update in res.get("result", []):
-                            up_id = update.get("update_id", 0)
-                            if up_id >= LAST_TELEGRAM_OFFSET:
-                                LAST_TELEGRAM_OFFSET = up_id + 1
-                            message = update.get("message") or update.get("edited_message") or update.get("callback_query")
-                            if message:
-                                process_long_poll_update(update, config)
-                    elif res.get("error_code") == 409:
-                        log_message("Telegram 409 Conflict detected. Waiting 5s for stale connections to clear...")
-                        time.sleep(5)
-            except Exception as e:
+                    time.sleep(2)
+            except Exception as outer_e:
                 CURRENT_LONG_POLL_RESPONSE = None
-                time.sleep(2)
-        except Exception as outer_e:
-            CURRENT_LONG_POLL_RESPONSE = None
-            log_message(f"Long polling outer loop error (auto-recovering): {outer_e}")
-            time.sleep(5)
-    LONG_POLLING_ACTIVE = False
+                log_message(f"Long polling outer loop error (auto-recovering): {outer_e}")
+                time.sleep(5)
+    finally:
+        LONG_POLLING_ACTIVE = False
+        try:
+            LONG_POLLING_LOCK.release()
+        except RuntimeError:
+            pass
 
 def takeover_failover_loop(stop_event):
     global PREFERRED_ENV, ACTIVE_ENV, IS_STANDBY, BOTH_DEAD_ALERT_SENT, LAST_API_POLL_SUCCESS, CONFIG_ERROR
@@ -3082,14 +3172,14 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                             self.send_json_response(200, {"status": "ok", "message": "Duplicate update ignored."})
                             return
 
-                        import re
-                        
-                        # Conversational state handling
-                        if USER_CONVERSATION_STATE:
+                          # Conversational state handling
+                        conv_state = get_user_conv_state(chat_id) or USER_CONVERSATION_STATE
+                        entered_vals = get_user_entered_vals(chat_id) or ENTERED_CURRENT_VALS
+
+                        if conv_state:
                             if text in ["/cancel", "cancel"]:
-                                log_message(f"User cancelled conversation state '{USER_CONVERSATION_STATE}'.")
-                                USER_CONVERSATION_STATE = None
-                                save_conv_state()
+                                log_message(f"User cancelled conversation state '{conv_state}'.")
+                                set_user_conv_state(chat_id, None)
                                 send_telegram_notification("Conversation cancelled.", config)
                                 self.send_json_response(200, {"status": "ok", "message": "Conversation cancelled."})
                                 return
@@ -3100,31 +3190,46 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                 if clean_opt in ["default", "current", "none", "yes", "no", "y", "n", "1", "2", "3"] or clean_opt.isdigit():
                                     text = clean_opt
                                 else:
-                                    log_message(f"User sent command '{text}' while in state '{USER_CONVERSATION_STATE}'. Cancelling previous state.")
-                                    USER_CONVERSATION_STATE = None
-                                    save_conv_state()
+                                    log_message(f"User sent command '{text}' while in state '{conv_state}'. Cancelling previous state.")
+                                    set_user_conv_state(chat_id, None)
+                                    conv_state = None
 
-                        if USER_CONVERSATION_STATE:
+                        if conv_state:
                             # 1. SELECT_MODE_FEAT
-                            if USER_CONVERSATION_STATE.startswith("SELECT_MODE_"):
-                                feat_key = USER_CONVERSATION_STATE[len("SELECT_MODE_"):].lower()
+                            if conv_state.startswith("SELECT_MODE_"):
+                                feat_key = conv_state[len("SELECT_MODE_"):].lower()
                                 meta = CONV_FEATURE_MAP.get(feat_key)
                                 if meta:
                                     if text in ["default", "1"]:
-                                        USER_CONVERSATION_STATE = f"AWAITING_DEFAULT_VAL_{feat_key.upper()}"
-                                        save_conv_state()
+                                        set_user_conv_state(chat_id, f"AWAITING_DEFAULT_VAL_{feat_key.upper()}")
                                         prompt = meta["default_prompt"]
                                         send_telegram_notification(prompt, config)
                                         self.send_json_response(200, {"status": "ok", "message": prompt})
                                         return
                                     elif text in ["current", "2"]:
-                                        USER_CONVERSATION_STATE = f"AWAITING_CURRENT_VAL_{feat_key.upper()}"
-                                        save_conv_state()
+                                        set_user_conv_state(chat_id, f"AWAITING_CURRENT_VAL_{feat_key.upper()}")
                                         prompt = meta["current_prompt"]
                                         send_telegram_notification(prompt, config)
                                         self.send_json_response(200, {"status": "ok", "message": prompt})
                                         return
                                     elif text in ["none", "3"]:
+                                        set_user_conv_state(chat_id, f"AWAITING_NONE_CONFIRM_{feat_key.upper()}")
+                                        msg = f"Do you want to turn on /{feat_key} checker?"
+                                        send_telegram_notification(msg, config, reply_markup=get_confirm_inline_keyboard())
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+                                    else:
+                                        msg = "Please select Default, Current, or None."
+                                        send_telegram_notification(msg, config, reply_markup=get_options_inline_keyboard())
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
+
+                            # 2. AWAITING_NONE_CONFIRM_FEAT
+                            elif conv_state.startswith("AWAITING_NONE_CONFIRM_"):
+                                feat_key = conv_state[len("AWAITING_NONE_CONFIRM_"):].lower()
+                                meta = CONV_FEATURE_MAP.get(feat_key)
+                                if meta:
+                                    if text in ["no", "n", "2"]:
                                         var_name = meta["var"]
                                         if meta.get("is_user"):
                                             globals()[var_name] = "none"
@@ -3137,21 +3242,25 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                             msg = f"{meta['label']} checker is off."
                                         save_thresholds()
                                         update_render_env_vars_async()
+                                        set_user_conv_state(chat_id, None)
                                         send_telegram_notification(msg, config)
-                                        USER_CONVERSATION_STATE = None
-                                        ENTERED_CURRENT_VALS.pop(feat_key, None)
-                                        save_conv_state()
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
-                                    else:
-                                        msg = "Please select Default, Current, or None."
+                                    elif text in ["yes", "y", "1"]:
+                                        set_user_conv_state(chat_id, f"AWAITING_ENABLE_MODE_{feat_key.upper()}")
+                                        msg = "By which you want to change?"
                                         send_telegram_notification(msg, config, reply_markup=get_options_inline_keyboard())
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
+                                    else:
+                                        msg = "Please select Yes or No."
+                                        send_telegram_notification(msg, config, reply_markup=get_confirm_inline_keyboard())
+                                        self.send_json_response(200, {"status": "ok", "message": msg})
+                                        return
 
-                            # 2. AWAITING_DEFAULT_VAL_FEAT
-                            elif USER_CONVERSATION_STATE.startswith("AWAITING_DEFAULT_VAL_"):
-                                feat_key = USER_CONVERSATION_STATE[len("AWAITING_DEFAULT_VAL_"):].lower()
+                            # 3. AWAITING_DEFAULT_VAL_FEAT
+                            elif conv_state.startswith("AWAITING_DEFAULT_VAL_"):
+                                feat_key = conv_state[len("AWAITING_DEFAULT_VAL_"):].lower()
                                 meta = CONV_FEATURE_MAP.get(feat_key)
                                 if meta:
                                     default_var = meta["default_var"]
@@ -3182,16 +3291,17 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         globals()[default_var] = val
                                         val_str = f"{val} min"
 
-                                    USER_CONVERSATION_STATE = f"AWAITING_DEFAULT_ON_CONFIRM_{feat_key.upper()}"
-                                    save_conv_state()
+                                    save_thresholds()
+                                    update_render_env_vars_async()
+                                    set_user_conv_state(chat_id, f"AWAITING_DEFAULT_ON_CONFIRM_{feat_key.upper()}")
                                     msg = f"{meta['default_prompt']} = {val_str}\n\nWant to turn ON {meta['label']}?"
                                     send_telegram_notification(msg, config, reply_markup=get_confirm_inline_keyboard())
                                     self.send_json_response(200, {"status": "ok", "message": msg})
                                     return
 
-                            # 3. AWAITING_CURRENT_VAL_FEAT
-                            elif USER_CONVERSATION_STATE.startswith("AWAITING_CURRENT_VAL_"):
-                                feat_key = USER_CONVERSATION_STATE[len("AWAITING_CURRENT_VAL_"):].lower()
+                            # 4. AWAITING_CURRENT_VAL_FEAT
+                            elif conv_state.startswith("AWAITING_CURRENT_VAL_"):
+                                feat_key = conv_state[len("AWAITING_CURRENT_VAL_"):].lower()
                                 meta = CONV_FEATURE_MAP.get(feat_key)
                                 if meta:
                                     default_var = meta["default_var"]
@@ -3219,36 +3329,39 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                             val = globals()[default_var]
                                         val_str = f"{val} min"
 
-                                    ENTERED_CURRENT_VALS[feat_key] = val
-                                    USER_CONVERSATION_STATE = f"AWAITING_CURRENT_ON_CONFIRM_{feat_key.upper()}"
-                                    save_conv_state()
+                                    entered_vals[feat_key] = val
+                                    set_user_conv_state(chat_id, f"AWAITING_CURRENT_ON_CONFIRM_{feat_key.upper()}", entered_vals=entered_vals)
                                     msg = f"{meta['label']} = {val_str}\n\nWant to turn ON {meta['label']}?"
                                     send_telegram_notification(msg, config, reply_markup=get_confirm_inline_keyboard())
                                     self.send_json_response(200, {"status": "ok", "message": msg})
                                     return
 
-                            # 4. AWAITING_DEFAULT_ON_CONFIRM_FEAT or AWAITING_CURRENT_ON_CONFIRM_FEAT
-                            elif USER_CONVERSATION_STATE.startswith("AWAITING_DEFAULT_ON_CONFIRM_") or USER_CONVERSATION_STATE.startswith("AWAITING_CURRENT_ON_CONFIRM_"):
-                                is_from_default = USER_CONVERSATION_STATE.startswith("AWAITING_DEFAULT_ON_CONFIRM_")
+                            # 5. AWAITING_DEFAULT_ON_CONFIRM_FEAT or AWAITING_CURRENT_ON_CONFIRM_FEAT
+                            elif conv_state.startswith("AWAITING_DEFAULT_ON_CONFIRM_") or conv_state.startswith("AWAITING_CURRENT_ON_CONFIRM_"):
+                                is_from_default = conv_state.startswith("AWAITING_DEFAULT_ON_CONFIRM_")
                                 prefix = "AWAITING_DEFAULT_ON_CONFIRM_" if is_from_default else "AWAITING_CURRENT_ON_CONFIRM_"
-                                feat_key = USER_CONVERSATION_STATE[len(prefix):].lower()
+                                feat_key = conv_state[len(prefix):].lower()
                                 meta = CONV_FEATURE_MAP.get(feat_key)
                                 if meta:
-                                    if text in ["yes", "y"]:
-                                        USER_CONVERSATION_STATE = f"AWAITING_ENABLE_MODE_{feat_key.upper()}"
-                                        save_conv_state()
+                                    if text in ["yes", "y", "1"]:
+                                        set_user_conv_state(chat_id, f"AWAITING_ENABLE_MODE_{feat_key.upper()}", entered_vals=entered_vals)
                                         msg = "By which you want to change?"
                                         send_telegram_notification(msg, config, reply_markup=get_options_inline_keyboard())
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
-                                    elif text in ["no", "n"]:
+                                    elif text in ["no", "n", "2"]:
                                         save_thresholds()
                                         update_render_env_vars_async()
-                                        USER_CONVERSATION_STATE = None
-                                        save_conv_state()
+                                        set_user_conv_state(chat_id, None)
                                         if is_from_default:
                                             msg = f"{meta['label']} default updated. Checker remains unchanged."
                                         else:
+                                            var_name = meta["var"]
+                                            globals()[var_name] = 0
+                                            if meta["clear_args"]:
+                                                for args in meta["clear_args"]:
+                                                    clear_aging_memory(*args)
+                                            save_thresholds()
                                             msg = f"{meta['label']} checker is off."
                                         send_telegram_notification(msg, config)
                                         self.send_json_response(200, {"status": "ok", "message": msg})
@@ -3259,9 +3372,9 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
 
-                            # 5. AWAITING_ENABLE_MODE_FEAT
-                            elif USER_CONVERSATION_STATE.startswith("AWAITING_ENABLE_MODE_"):
-                                feat_key = USER_CONVERSATION_STATE[len("AWAITING_ENABLE_MODE_"):].lower()
+                            # 6. AWAITING_ENABLE_MODE_FEAT
+                            elif conv_state.startswith("AWAITING_ENABLE_MODE_"):
+                                feat_key = conv_state[len("AWAITING_ENABLE_MODE_"):].lower()
                                 meta = CONV_FEATURE_MAP.get(feat_key)
                                 if meta:
                                     var_name = meta["var"]
@@ -3272,8 +3385,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         globals()[var_name] = val
                                         save_thresholds()
                                         update_render_env_vars_async()
-                                        USER_CONVERSATION_STATE = None
-                                        save_conv_state()
+                                        set_user_conv_state(chat_id, None)
 
                                         if meta.get("is_hour"):
                                             val_str = f"{val}h"
@@ -3289,12 +3401,11 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         return
 
                                     elif text in ["current", "2"]:
-                                        val = ENTERED_CURRENT_VALS.get(feat_key, globals()[var_name])
+                                        val = entered_vals.get(feat_key, globals()[var_name])
                                         globals()[var_name] = val
                                         save_thresholds()
                                         update_render_env_vars_async()
-                                        USER_CONVERSATION_STATE = None
-                                        save_conv_state()
+                                        set_user_conv_state(chat_id, None)
 
                                         if meta.get("is_hour"):
                                             val_str = f"{val}h"
@@ -3321,9 +3432,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                             msg = f"{meta['label']} checker is off."
                                         save_thresholds()
                                         update_render_env_vars_async()
-                                        USER_CONVERSATION_STATE = None
-                                        ENTERED_CURRENT_VALS.pop(feat_key, None)
-                                        save_conv_state()
+                                        set_user_conv_state(chat_id, None)
                                         send_telegram_notification(msg, config)
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
@@ -3333,8 +3442,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                         send_telegram_notification(msg, config, reply_markup=get_options_inline_keyboard())
                                         self.send_json_response(200, {"status": "ok", "message": msg})
                                         return
- 
-                        if not USER_CONVERSATION_STATE:
+
+                        if not conv_state:
                             if is_callback and text in ["default", "current", "none", "yes", "no"]:
                                 msg = "Session expired or bot restarted. Please start again by typing /f1, /f2, etc."
                                 send_telegram_notification(msg, config)
@@ -3356,10 +3465,9 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                                     for args in meta["clear_args"]:
                                         clear_aging_memory(*args)
                                 save_thresholds()
-                                update_render_env_vars_async()
                                 msg = f"{meta['label']} checker is off."
+                                set_user_conv_state(chat_id, None)
                                 send_telegram_notification(msg, config)
-                                USER_CONVERSATION_STATE = None
                                 self.send_json_response(200, {"status": "ok", "message": msg})
                                 return
 
