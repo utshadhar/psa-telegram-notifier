@@ -155,15 +155,21 @@ def is_duplicate_update(update):
 
 def get_user_conv_state(chat_id):
     with CONV_STATE_LOCK:
-        cid = str(chat_id)
-        data = CONVERSATION_STATES.get(cid, {})
-        return data.get("state")
+        cid = str(chat_id) if chat_id else ""
+        if cid and cid in CONVERSATION_STATES:
+            st = CONVERSATION_STATES[cid].get("state")
+            if st:
+                return st
+        return USER_CONVERSATION_STATE
 
 def get_user_entered_vals(chat_id):
     with CONV_STATE_LOCK:
-        cid = str(chat_id)
-        data = CONVERSATION_STATES.get(cid, {})
-        return dict(data.get("entered_vals", {}))
+        cid = str(chat_id) if chat_id else ""
+        if cid and cid in CONVERSATION_STATES:
+            vals = CONVERSATION_STATES[cid].get("entered_vals")
+            if vals:
+                return dict(vals)
+        return dict(ENTERED_CURRENT_VALS)
 
 def set_user_conv_state(chat_id, state, entered_vals=None):
     global USER_CONVERSATION_STATE, ENTERED_CURRENT_VALS
@@ -3280,51 +3286,51 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                         start_end_match = re.match(r'^(?:/)?f(1[0-1]|[1-9])_(start|end)$', text)
                         if start_end_match:
                             feat_num, action = start_end_match.groups()
-                            start_feature_conversation(self, f"f{feat_num}_{action}", config)
+                            start_feature_conversation(self, f"f{feat_num}_{action}", config, chat_id=chat_id)
                             return
 
                         # Direct command triggers
                         if text in ["f1", "f1 on", "/f1", "/f1_on"]:
-                            start_feature_conversation(self, "f1", config)
+                            start_feature_conversation(self, "f1", config, chat_id=chat_id)
                             return
                         elif text in ["f2", "f2 on", "/f2", "/f2_on"]:
-                            start_feature_conversation(self, "f2", config)
+                            start_feature_conversation(self, "f2", config, chat_id=chat_id)
                             return
                         elif text in ["f3", "f3 on", "/f3", "/f3_on"]:
-                            start_feature_conversation(self, "f3", config)
+                            start_feature_conversation(self, "f3", config, chat_id=chat_id)
                             return
                         elif text in ["f4", "f4 on", "/f4", "/f4_on"]:
-                            start_feature_conversation(self, "f4", config)
+                            start_feature_conversation(self, "f4", config, chat_id=chat_id)
                             return
                         elif text in ["f5", "f5 on", "/f5", "/f5_on"]:
-                            start_feature_conversation(self, "f5", config)
+                            start_feature_conversation(self, "f5", config, chat_id=chat_id)
                             return
                         elif text in ["f6", "f6 on", "/f6", "/f6_on"]:
-                            start_feature_conversation(self, "f6", config)
+                            start_feature_conversation(self, "f6", config, chat_id=chat_id)
                             return
                         elif text in ["f7", "f7 on", "/f7", "/f7_on"]:
-                            start_feature_conversation(self, "f7", config)
+                            start_feature_conversation(self, "f7", config, chat_id=chat_id)
                             return
                         elif text in ["f8", "f8 on", "/f8", "/f8_on"]:
-                            start_feature_conversation(self, "f8", config)
+                            start_feature_conversation(self, "f8", config, chat_id=chat_id)
                             return
                         elif text in ["f9", "f9 on", "/f9", "/f9_on"]:
-                            start_feature_conversation(self, "f9", config)
+                            start_feature_conversation(self, "f9", config, chat_id=chat_id)
                             return
                         elif text in ["f10", "f10 on", "/f10", "/f10_on", "ceramics_so", "/ceramics_so"]:
-                            start_feature_conversation(self, "f10", config)
+                            start_feature_conversation(self, "f10", config, chat_id=chat_id)
                             return
                         elif text in ["f11", "f11 on", "/f11", "/f11_on", "ceramics_co", "/ceramics_co"]:
-                            start_feature_conversation(self, "f11", config)
+                            start_feature_conversation(self, "f11", config, chat_id=chat_id)
                             return
                         elif text in ["f7_start", "/f7_start"]:
-                            start_feature_conversation(self, "f7_start", config)
+                            start_feature_conversation(self, "f7_start", config, chat_id=chat_id)
                             return
                         elif text in ["f7_end", "/f7_end"]:
-                            start_feature_conversation(self, "f7_end", config)
+                            start_feature_conversation(self, "f7_end", config, chat_id=chat_id)
                             return
                         elif text in ["f7_user", "/f7_user"]:
-                            start_feature_conversation(self, "f7_user", config)
+                            start_feature_conversation(self, "f7_user", config, chat_id=chat_id)
                             return
                         elif text in ["f7_test", "/f7_test"]:
                             msg = f"Initiating a test voice call via CallMeBot to: {CALLMEBOT_USER}"
