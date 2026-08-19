@@ -1677,7 +1677,7 @@ def send_telegram_notification(message, config, reply_markup=None):
     else:
         return _send_single_telegram_msg(message, token, chat_id, reply_markup)
 
-def answer_callback_query(callback_query_id, config):
+def answer_callback_query(callback_query_id, config, chat_id=None, message_id=None):
     token = config.get("telegram_bot_token")
     if not token:
         return
@@ -1686,10 +1686,24 @@ def answer_callback_query(callback_query_id, config):
     data = json.dumps(payload).encode('utf-8')
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=5) as response:
             response.read()
     except Exception:
         pass
+
+    if chat_id and message_id:
+        edit_url = f"https://api.telegram.org/bot{token}/editMessageReplyMarkup"
+        edit_payload = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "reply_markup": {"inline_keyboard": []}
+        }
+        try:
+            edit_req = urllib.request.Request(edit_url, data=json.dumps(edit_payload).encode('utf-8'), headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}, method="POST")
+            with urllib.request.urlopen(edit_req, timeout=5) as resp:
+                resp.read()
+        except Exception:
+            pass
 
 def is_time_for_pending_alert(dt, end_hour=1):
     """
@@ -2929,8 +2943,9 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                     text = str(callback_query.get("data") or "").strip().lower()
                     
                     callback_id = callback_query.get("id")
+                    orig_msg_id = message.get("message_id") if isinstance(message, dict) else None
                     if callback_id:
-                        threading.Thread(target=answer_callback_query, args=(callback_id, config), daemon=True).start()
+                        threading.Thread(target=answer_callback_query, args=(callback_id, config, chat_id, orig_msg_id), daemon=True).start()
                 
                 if message or is_callback:
                     if not is_callback:
