@@ -3809,7 +3809,33 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
         return request, client_address
 
 def main():
-    """Entry point — boots pure LOCAL (long polling) mode exclusively."""
+    """Entry point — boots pure LOCAL (long polling) mode exclusively. On Render, runs a dormant dummy server."""
+    is_render_env = (os.environ.get("RENDER") is not None or os.environ.get("RENDER_SERVICE_ID") is not None)
+    if is_render_env:
+        print(f"[{datetime.datetime.now()}] Render Cloud environment detected. Bot execution is completely DISABLED on Render.")
+        render_port = int(os.environ.get("PORT", 10000))
+        class DummyHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"status": "disabled_on_render"}')
+            def do_POST(self):
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"status": "disabled_on_render"}')
+            def log_message(self, format, *args):
+                pass
+        server = http.server.HTTPServer(('', render_port), DummyHandler)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            server.server_close()
+        sys.exit(0)
+
     config = load_config()
     port = config.get("server_port", 8085)
     stop_event = threading.Event()

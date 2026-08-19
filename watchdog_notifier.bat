@@ -5,7 +5,7 @@ cd /d "C:\Users\admin\.gemini\antigravity-ide\scratch\psa-telegram-notifier"
 
 set PS_SCRIPT=%TEMP%\psa_health_check.ps1
 echo try { > "%PS_SCRIPT%"
-echo   $r = Invoke-WebRequest -Uri "http://localhost:8085/" -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop >> "%PS_SCRIPT%"
+echo   $r = Invoke-WebRequest -Uri "http://localhost:8085/" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop >> "%PS_SCRIPT%"
 echo   $j = $r.Content ^| ConvertFrom-Json >> "%PS_SCRIPT%"
 echo   if ($j.status -eq "online") { exit 0 } else { exit 1 } >> "%PS_SCRIPT%"
 echo } catch { exit 2 } >> "%PS_SCRIPT%"
