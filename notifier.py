@@ -212,12 +212,17 @@ def load_conv_state():
 # State switching and failover variables
 PREFERRED_ENV = "Local"
 ACTIVE_ENV = "Local"
+IS_STANDBY = False
 BOTH_DEAD_ALERT_SENT = False
 
 def is_current_instance_active():
     is_render = (os.environ.get("RENDER") is not None or os.environ.get("RENDER_SERVICE_ID") is not None)
     if not is_render:
         return True
+    cfg = load_config()
+    pref = cfg.get("PREFERRED_ENV", PREFERRED_ENV)
+    if pref == "Local" and ACTIVE_ENV != "Render":
+        return False
     return not IS_STANDBY
 LAST_API_POLL_SUCCESS = True
 CONFIG_ERROR = False
@@ -4048,13 +4053,22 @@ def main():
     sched_thread_3.start()
 
     if is_render:
-        print(f"[{datetime.datetime.now()}] Booting in RENDER (webhook) mode.")
-        register_bot_commands(config)
-        
-        # Register Render Webhook on startup
-        render_url = os.environ.get("RENDER_EXTERNAL_URL") or config.get("render_external_url")
-        if render_url:
-            threading.Thread(target=register_webhook, args=(render_url, config), daemon=True).start()
+        global IS_STANDBY, ACTIVE_ENV
+        pref_env = config.get("PREFERRED_ENV", "Local")
+        if pref_env == "Local":
+            IS_STANDBY = True
+            ACTIVE_ENV = "Local"
+            print(f"[{datetime.datetime.now()}] Booting in RENDER (STANDBY mode — Primary environment is Local). Webhook disabled.")
+        else:
+            IS_STANDBY = False
+            ACTIVE_ENV = "Render"
+            print(f"[{datetime.datetime.now()}] Booting in RENDER (ACTIVE webhook mode).")
+            register_bot_commands(config)
+            
+            # Register Render Webhook on startup
+            render_url = os.environ.get("RENDER_EXTERNAL_URL") or config.get("render_external_url")
+            if render_url:
+                threading.Thread(target=register_webhook, args=(render_url, config), daemon=True).start()
         
         server = ThreadingHTTPServer(('', port), RequestHandler)
         print(f"[{datetime.datetime.now()}] API server starting on port {port}...")
