@@ -3904,24 +3904,9 @@ def main():
         run_long_polling_loop(stop_event)
 
     def thread_watchdog(stop_event, threads_ref):
-        global LONG_POLLING_ACTIVE, LAST_LONG_POLL_TIME, CURRENT_LONG_POLL_RESPONSE
         while not stop_event.is_set():
             if stop_event.wait(15):
                 break
-            elapsed = time.time() - LAST_LONG_POLL_TIME
-            if elapsed > 45.0:
-                log_message(f"⚠️ Long Polling thread stalled ({elapsed:.1f}s > 45s). Closing frozen socket & restarting Long Polling thread...")
-                try:
-                    if CURRENT_LONG_POLL_RESPONSE:
-                        CURRENT_LONG_POLL_RESPONSE.close()
-                except Exception:
-                    pass
-                CURRENT_LONG_POLL_RESPONSE = None
-                LONG_POLLING_ACTIVE = False
-                lp_t = threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")
-                lp_t.start()
-                threads_ref[3] = ["LongPollingThread", lp_t, lambda: threading.Thread(target=run_long_polling_loop_restart, args=(stop_event,), daemon=True, name="LongPollingThread")]
-
             for i, (name, t, factory) in enumerate(threads_ref):
                 if not t.is_alive():
                     log_message(f"Thread '{name}' died unexpectedly. Restarting...")
